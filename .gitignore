@@ -27,5 +27,9 @@ node_modules/
 # Claude Code
 .claude/
 
+# Test fixtures (override data ignores)
+!test/*.ndjson
+!test/*.yaml
+
 # Archive (backed up on NAS)
 archive/
