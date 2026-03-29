@@ -81,8 +81,18 @@ func (db *DB) CreateSchema(embeddingDim int) error {
 	return nil
 }
 
+// RawQuery executes an arbitrary SQL query and returns the result rows.
+func (db *DB) RawQuery(query string) (*sql.Rows, error) {
+	return db.conn.Query(query)
+}
+
 // CreateIndexes creates the HNSW vector similarity index and spatial index.
 func (db *DB) CreateIndexes(embeddingDim int) error {
+	// Enable persistent HNSW indexes for on-disk databases.
+	if _, err := db.conn.Exec("SET hnsw_enable_experimental_persistence = true;"); err != nil {
+		return fmt.Errorf("enabling HNSW persistence: %w", err)
+	}
+
 	// HNSW index for vector similarity search.
 	hnswSQL := fmt.Sprintf(`
 		CREATE INDEX IF NOT EXISTS idx_nodes_embedding
@@ -101,13 +111,13 @@ func (db *DB) CreatePropertyGraph() error {
 	_, err := db.conn.Exec(`
 		CREATE OR REPLACE PROPERTY GRAPH domain_graph
 		VERTEX TABLES (
-			Nodes_Base LABEL node
+			Nodes_Base LABEL "node"
 		)
 		EDGE TABLES (
 			Edges_Base
 				SOURCE KEY (source_id) REFERENCES Nodes_Base (node_id)
 				DESTINATION KEY (target_id) REFERENCES Nodes_Base (node_id)
-				LABEL edge
+				LABEL "edge"
 		);
 	`)
 	if err != nil {

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -211,10 +212,11 @@ func processNDJSONFile(path string, batch int, fn func([]json.RawMessage) error)
 }
 
 func embedNodes(nodes []domain.Node, client *embed.Client) error {
+	ctx := context.Background()
 	for i := range nodes {
 		n := &nodes[i]
 		if n.SemanticText != "" && len(n.Embedding) == 0 {
-			vec, err := client.Embed(nil, n.SemanticText)
+			vec, err := client.Embed(ctx, n.SemanticText)
 			if err != nil {
 				return fmt.Errorf("embedding node %s: %w", n.NodeID, err)
 			}

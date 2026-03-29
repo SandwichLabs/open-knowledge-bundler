@@ -90,12 +90,20 @@ func scanResults(rows *sql.Rows) ([]SearchResult, error) {
 	var results []SearchResult
 	for rows.Next() {
 		var r SearchResult
-		var propsRaw string
+		var propsRaw any
 		if err := rows.Scan(&r.NodeID, &r.NodeType, &propsRaw, &r.SemanticText, &r.RRFScore); err != nil {
 			return nil, fmt.Errorf("scanning row: %w", err)
 		}
-		if err := json.Unmarshal([]byte(propsRaw), &r.Properties); err != nil {
-			r.Properties = map[string]any{"_raw": propsRaw}
+		switch v := propsRaw.(type) {
+		case map[string]any:
+			r.Properties = v
+		case string:
+			if err := json.Unmarshal([]byte(v), &r.Properties); err != nil {
+				r.Properties = map[string]any{"_raw": v}
+			}
+		default:
+			raw, _ := json.Marshal(v)
+			r.Properties = map[string]any{"_raw": string(raw)}
 		}
 		results = append(results, r)
 	}

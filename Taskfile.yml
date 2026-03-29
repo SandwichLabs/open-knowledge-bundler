@@ -1,0 +1,165 @@
+version: "3"
+
+vars:
+  CLI_DIR: ./cli
+  CLI_BIN: "{{.CLI_DIR}}/cbi"
+  DATA_DIR: ./data
+  OUT_DIR: ./out
+  SOURCE_DB: chi-city-data.duckdb
+  DOMAIN_CONFIG: "{{.CLI_DIR}}/domain.yaml"
+  TARGET_DB: "{{.CLI_DIR}}/chicago_business.duckdb"
+
+tasks:
+  # ---------------------------------------------------------------------------
+  # Build
+  # ---------------------------------------------------------------------------
+  build:
+    desc: Build the cbi CLI binary
+    dir: "{{.CLI_DIR}}"
+    cmds:
+      - go build -o cbi .
+    sources:
+      - "**/*.go"
+      - go.mod
+      - go.sum
+    generates:
+      - cbi
+
+  tidy:
+    desc: Run go mod tidy
+    dir: "{{.CLI_DIR}}"
+    cmds:
+      - go mod tidy
+
+  # ---------------------------------------------------------------------------
+  # Database Init
+  # ---------------------------------------------------------------------------
+  init:
+    desc: Initialize the knowledge graph database (extensions, schema, indexes, property graph)
+    deps: [build]
+    dir: "{{.CLI_DIR}}"
+    cmds:
+      - ./cbi init --config domain.yaml
+
+  # ---------------------------------------------------------------------------
+  # Data Conversion
+  # ---------------------------------------------------------------------------
+  convert:
+    desc: Convert source DuckDB data to NDJSON node/edge files
+    cmds:
+      - npx tsx {{.DATA_DIR}}/to_ndjson.ts --db {{.SOURCE_DB}} --out {{.OUT_DIR}}
+    sources:
+      - "{{.DATA_DIR}}/to_ndjson.ts"
+      - "{{.SOURCE_DB}}"
+    generates:
+      - "{{.OUT_DIR}}/nodes.ndjson"
+      - "{{.OUT_DIR}}/edges.ndjson"
+
+  # ---------------------------------------------------------------------------
+  # Ingestion
+  # ---------------------------------------------------------------------------
+  ingest:nodes:
+    desc: Ingest nodes into the knowledge graph
+    deps: [build, init]
+    dir: "{{.CLI_DIR}}"
+    cmds:
+      - ./cbi ingest --nodes ../{{.OUT_DIR}}/nodes.ndjson --time {{.TIME}} --batch-size {{.BATCH_SIZE}}
+    vars:
+      TIME: '{{.TIME | default "2026-03-29"}}'
+      BATCH_SIZE: '{{.BATCH_SIZE | default "500"}}'
+    preconditions:
+      - test -f ../{{.OUT_DIR}}/nodes.ndjson
+
+  ingest:edges:
+    desc: Ingest edges into the knowledge graph
+    deps: [build, init]
+    dir: "{{.CLI_DIR}}"
+    cmds:
+      - ./cbi ingest --edges ../{{.OUT_DIR}}/edges.ndjson --time {{.TIME}} --batch-size {{.BATCH_SIZE}}
+    vars:
+      TIME: '{{.TIME | default "2026-03-29"}}'
+      BATCH_SIZE: '{{.BATCH_SIZE | default "500"}}'
+    preconditions:
+      - test -f ../{{.OUT_DIR}}/edges.ndjson
+
+  ingest:
+    desc: Ingest both nodes and edges (nodes first)
+    cmds:
+      - task: ingest:nodes
+      - task: ingest:edges
+
+  # ---------------------------------------------------------------------------
+  # Full Pipeline
+  # ---------------------------------------------------------------------------
+  pipeline:
+    desc: Run full pipeline — convert, init, ingest
+    cmds:
+      - task: convert
+      - task: init
+      - task: ingest
+
+  # ---------------------------------------------------------------------------
+  # Query
+  # ---------------------------------------------------------------------------
+  query:
+    desc: "Run a hybrid search query (usage: task query -- \"your search text\")"
+    deps: [build]
+    dir: "{{.CLI_DIR}}"
+    cmds:
+      - ./cbi query --text "{{.CLI_ARGS}}" --limit {{.LIMIT}}
+    vars:
+      LIMIT: '{{.LIMIT | default "10"}}'
+
+  # ---------------------------------------------------------------------------
+  # Source Database Exploration
+  # ---------------------------------------------------------------------------
+  schema:
+    desc: Show source database schema
+    cmds:
+      - duckdb -markdown -c "SHOW ALL TABLES;" {{.SOURCE_DB}}
+
+  sql:
+    desc: "Run a SQL query against the source database (usage: task sql -- \"SELECT ...\")"
+    cmds:
+      - duckdb -markdown -c "{{.CLI_ARGS}}" {{.SOURCE_DB}}
+
+  summarize:
+    desc: "Summarize a table or query (usage: task summarize -- city_businesses)"
+    cmds:
+      - duckdb -markdown -c "SUMMARIZE {{.CLI_ARGS}}" {{.SOURCE_DB}}
+
+  graph:schema:
+    desc: Show the knowledge graph database schema
+    cmds:
+      - duckdb -markdown -c "SHOW ALL TABLES;" {{.TARGET_DB}}
+    preconditions:
+      - test -f {{.TARGET_DB}}
+
+  graph:sql:
+    desc: "Run a SQL query against the knowledge graph (usage: task graph:sql -- \"SELECT ...\")"
+    cmds:
+      - duckdb -markdown -c "{{.CLI_ARGS}}" {{.TARGET_DB}}
+    preconditions:
+      - test -f {{.TARGET_DB}}
+
+  graph:stats:
+    desc: Show node/edge counts in the knowledge graph
+    cmds:
+      - duckdb -markdown -c "SELECT node_type, COUNT(*) as count FROM Nodes_Base WHERE is_current GROUP BY 1 ORDER BY 2 DESC; SELECT relationship_type, COUNT(*) as count FROM Edges_Base WHERE is_current GROUP BY 1 ORDER BY 2 DESC;" {{.TARGET_DB}}
+    preconditions:
+      - test -f {{.TARGET_DB}}
+
+  # ---------------------------------------------------------------------------
+  # Cleanup
+  # ---------------------------------------------------------------------------
+  clean:
+    desc: Remove build artifacts and generated data
+    cmds:
+      - rm -f {{.CLI_BIN}}
+      - rm -rf {{.OUT_DIR}}
+
+  clean:db:
+    desc: Remove the knowledge graph database (destructive)
+    prompt: This will delete {{.TARGET_DB}}. Continue?
+    cmds:
+      - rm -f {{.TARGET_DB}}

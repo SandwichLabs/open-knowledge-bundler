@@ -10,10 +10,11 @@
 *.parquet
 out/
 data/ducklake/
+tmp/
 
 # Environment
 .env
-
+.task
 # Go binary
 cli/cbi
 

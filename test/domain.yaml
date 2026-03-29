@@ -1,0 +1,59 @@
+domain_name: pokemon_world
+embedding_dim: 768
+embedding_model: gemma
+endpoint_url: "http://localhost:8080"
+database_path: pokemon.duckdb
+
+node_definitions:
+  Pokemon:
+    semantic_fields:
+      - name
+      - description
+    mappings:
+      - { source_field: "pokedex_id", target_field: node_id, is_key: true }
+      - { source_field: "name",       target_field: name }
+      - { source_field: "generation", target_field: generation }
+
+  Type:
+    semantic_fields:
+      - name
+    mappings:
+      - { source_field: "type_name", target_field: node_id, is_key: true }
+      - { source_field: "type_name", target_field: name }
+
+  Region:
+    semantic_fields:
+      - name
+      - description
+    mappings:
+      - { source_field: "region_name", target_field: node_id, is_key: true }
+      - { source_field: "region_name", target_field: name }
+
+  Trainer:
+    semantic_fields:
+      - name
+      - specialty
+    mappings:
+      - { source_field: "trainer_name", target_field: node_id, is_key: true }
+      - { source_field: "trainer_name", target_field: name }
+
+edge_definitions:
+  HAS_TYPE:
+    mappings:
+      - { source_field: "pokemon_id", target_field: source_id, is_key: true }
+      - { source_field: "type_id",    target_field: target_id, is_key: true }
+
+  FOUND_IN:
+    mappings:
+      - { source_field: "pokemon_id", target_field: source_id, is_key: true }
+      - { source_field: "region_id",  target_field: target_id, is_key: true }
+
+  OWNED_BY:
+    mappings:
+      - { source_field: "pokemon_id",  target_field: source_id, is_key: true }
+      - { source_field: "trainer_id",  target_field: target_id, is_key: true }
+
+  EVOLVES_TO:
+    mappings:
+      - { source_field: "from_id", target_field: source_id, is_key: true }
+      - { source_field: "to_id",   target_field: target_id, is_key: true }
