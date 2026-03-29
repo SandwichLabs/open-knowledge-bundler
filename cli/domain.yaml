@@ -1,0 +1,114 @@
+domain_name: chicago_business
+embedding_dim: 768
+embedding_model: gemma
+endpoint_url: "http://localhost:8080"
+database_path: chicago_business.duckdb
+
+# Spatial configuration
+spatial:
+  near_threshold_meters: 200
+
+# --- Node Definitions ---
+node_definitions:
+  Business:
+    semantic_fields:
+      - legal_name
+      - doing_business_as
+      - activity
+      - license_description
+      - address
+      - neighborhood
+    mappings:
+      - { source_field: "ACCOUNT NUMBER",   target_field: account_number, is_key: true }
+      - { source_field: "SITE NUMBER",      target_field: site_number,    is_key: true }
+      - { source_field: "ID",               target_field: license_id }
+      - { source_field: "LEGAL NAME",       target_field: legal_name }
+      - { source_field: "DOING BUSINESS AS NAME", target_field: doing_business_as }
+      - { source_field: "ADDRESS",          target_field: address }
+      - { source_field: "CITY",             target_field: city }
+      - { source_field: "STATE",            target_field: state }
+      - { source_field: "ZIP CODE",         target_field: zip_code }
+      - { source_field: "LATITUDE",         target_field: latitude }
+      - { source_field: "LONGITUDE",        target_field: longitude }
+      - { source_field: "PRI_NEIGH",        target_field: neighborhood }
+      - { source_field: "SEC_NEIGH",        target_field: secondary_neighborhood }
+      - { source_field: "WARD",             target_field: ward }
+      - { source_field: "LICENSE CODE",     target_field: license_code }
+      - { source_field: "LICENSE DESCRIPTION", target_field: license_description }
+      - { source_field: "activity",         target_field: activity }
+      - { source_field: "BUSINESS ACTIVITY ID", target_field: activity_id }
+      - { source_field: "LICENSE STATUS",   target_field: license_status }
+      - { source_field: "DATE ISSUED",      target_field: date_issued }
+      - { source_field: "LICENSE TERM START DATE", target_field: license_term_start }
+      - { source_field: "LICENSE TERM EXPIRATION DATE", target_field: license_term_expiration }
+
+  Neighborhood:
+    semantic_fields:
+      - name
+    mappings:
+      - { source_field: "PRI_NEIGH",   target_field: name,       is_key: true }
+      - { source_field: "SEC_NEIGH",   target_field: secondary_name }
+      - { source_field: "SHAPE_AREA",  target_field: shape_area }
+      - { source_field: "SHAPE_LEN",   target_field: shape_length }
+      - { source_field: "the_geom",    target_field: geometry }
+
+  Ward:
+    semantic_fields:
+      - name
+    mappings:
+      - { source_field: "WARD", target_field: name, is_key: true }
+
+  Activity:
+    semantic_fields:
+      - name
+      - description
+    mappings:
+      - { source_field: "BUSINESS ACTIVITY ID", target_field: activity_id, is_key: true }
+      - { source_field: "activity",              target_field: name }
+      - { source_field: "description",           target_field: description }
+
+  LicenseType:
+    semantic_fields:
+      - name
+    mappings:
+      - { source_field: "LICENSE CODE",        target_field: license_code, is_key: true }
+      - { source_field: "LICENSE DESCRIPTION", target_field: name }
+
+# --- Edge Definitions ---
+edge_definitions:
+  LOCATED_IN:
+    mappings:
+      - { source_field: "ACCOUNT NUMBER", target_field: source_id, is_key: true }
+      - { source_field: "SITE NUMBER",    target_field: source_id_part }
+      - { source_field: "PRI_NEIGH",      target_field: target_id, is_key: true }
+
+  IN_WARD:
+    mappings:
+      - { source_field: "ACCOUNT NUMBER", target_field: source_id, is_key: true }
+      - { source_field: "SITE NUMBER",    target_field: source_id_part }
+      - { source_field: "WARD",           target_field: target_id, is_key: true }
+
+  HAS_ACTIVITY:
+    mappings:
+      - { source_field: "ACCOUNT NUMBER",       target_field: source_id, is_key: true }
+      - { source_field: "SITE NUMBER",           target_field: source_id_part }
+      - { source_field: "BUSINESS ACTIVITY ID",  target_field: target_id, is_key: true }
+
+  LICENSED_AS:
+    mappings:
+      - { source_field: "ACCOUNT NUMBER", target_field: source_id, is_key: true }
+      - { source_field: "SITE NUMBER",    target_field: source_id_part }
+      - { source_field: "LICENSE CODE",   target_field: target_id, is_key: true }
+
+  SAME_ACCOUNT:
+    mappings:
+      - { source_field: "ACCOUNT NUMBER", target_field: group_key, is_key: true }
+
+  SAME_ENTITY:
+    mappings:
+      - { source_field: "LEGAL NAME", target_field: group_key, is_key: true }
+
+  NEAR:
+    mappings:
+      - { source_field: "LATITUDE",  target_field: source_lat }
+      - { source_field: "LONGITUDE", target_field: source_lng }

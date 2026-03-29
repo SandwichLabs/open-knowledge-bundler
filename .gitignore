@@ -1,0 +1,30 @@
+# Data files
+*.duckdb
+*.duckdb.wal
+*.db
+*.ducklake
+*.ducklake.files/
+*.csv
+*.json
+*.ndjson
+*.parquet
+out/
+data/ducklake/
+
+# Environment
+.env
+
+# Go binary
+cli/cbi
+
+# Node
+node_modules/
+
+# OS
+.DS_Store
+
+# Claude Code
+.claude/
+
+# Archive (backed up on NAS)
+archive/
