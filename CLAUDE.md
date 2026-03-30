@@ -4,115 +4,117 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a Chicago Business Lead Generation and Analysis Platform that processes comprehensive business licensing data (58,108+ records) and provides both CLI tools and web interface for business intelligence and lead generation.
-
-## Technology Stack
-
-- **Backend**: Node.js with TypeScript
-- **Database**: DuckDB (primary analytics), SQLite (embeddings)
-- **Frontend**: Astro framework with MDX support
-- **Data Processing**: LLM embeddings for semantic search, business clustering
+A domain-agnostic, local-first GraphRAG CLI (`cbi`) that builds temporal knowledge graphs in DuckDB with hybrid search (vector + lexical + graph). The first domain is Chicago business licensing data (58,108+ records), but the system is designed to work with any domain defined via YAML configuration.
 
 ## Essential Commands
 
-### Database Operations
 ```bash
-# Query the main business database
-task query QUERY="SELECT * FROM city_businesses LIMIT 10"
-
-# Show database schema
-task schema
-
-# Summarize table or query results
-task summarize QUERY_OR_TABLE="city_businesses"
+task build                    # Compile the Go CLI → cli/cbi
+task tidy                     # go mod tidy
+task pipeline                 # Full end-to-end: convert → init → ingest
+task clean                    # Remove binary and out/ directory
+task clean:db                 # Delete the knowledge graph database (prompts)
 ```
 
-### Web Application (leads-web-preview/)
+### CLI (after `task build`, run from directory containing domain.yaml)
+
 ```bash
-cd leads-web-preview/
-npm run dev      # Start development server (localhost:4321)
-npm run build    # Build for production
-npm run preview  # Preview production build
+cbi init --config domain.yaml                          # Create DB, load extensions, schema, indexes, property graph
+cbi ingest --nodes n.ndjson --edges e.ndjson            # NDJSON mode (batched, one record per line)
+cbi ingest --file data.json                             # Single JSON mode ({nodes: [...], edges: [...]})
+cbi query --text "search" --limit 10 [--date 2025-01-01]  # Hybrid search with optional temporal filter
+cbi graph --sql "FROM GRAPH_TABLE(...)"                 # Raw SQL/PGQ queries
+cbi schema                                             # LLM-friendly schema readout with query examples
 ```
 
-### Data Processing
+### Source Database Exploration (reads chi-city-data.duckdb directly)
+
 ```bash
-# Interactive business search using embeddings
-./search.sh
-
-# Neighborhood-based analysis
-./use_by_hood.sh
-
-# Generate site content from clusters
-npx tsx make_site_docs.ts
+task schema                           # Show all tables
+task sql -- "SELECT ..."              # Run SQL
+task summarize -- city_businesses     # Column statistics
+task graph:stats                      # Node/edge counts in knowledge graph
 ```
 
-## Key Databases
+### Test Fixtures (Pokemon domain)
 
-- **`chi-city-data.duckdb`** - Main Chicago business licensing data with geographic and activity information
-- **`business_embeds.db`** - SQLite database containing business embeddings for semantic search
-- **`leadgen.duckdb`** - Lead generation specific database
-- **`business.db`** - Additional business data
+```bash
+cd test
+rm -f pokemon.duckdb
+../cli/cbi init --config domain.yaml
+../cli/cbi ingest --nodes nodes.ndjson --config domain.yaml --batch-size 10
+../cli/cbi ingest --edges edges.ndjson --config domain.yaml
+../cli/cbi query --text "fire breathing dragon" --config domain.yaml --limit 3
+```
 
-## Architecture Overview
+## Architecture
 
-### Data Flow
-1. **Raw Data**: Chicago business licensing CSV files
-2. **Processing**: DuckDB analytics, clustering, LLM embeddings
-3. **Storage**: Multiple specialized databases
-4. **Access**: CLI tools for exploration, web interface for presentation
+### Chimera Architecture: Four DuckDB Extensions in One Database
 
-### Business Data Dimensions
-- **Activity Types**: 366+ distinct business activities (food, retail, services, etc.)
-- **Geographic**: 110+ neighborhoods, 50 wards, precise coordinates
-- **Licensing**: 52+ license types with status and date tracking
-- **Scale**: 58,108+ active business records
+| Extension | Purpose | Key Functions |
+|-----------|---------|---------------|
+| **vss** | Vector similarity search | HNSW index, `array_cosine_distance` |
+| **fts** | Full-text search | `match_bm25` macro, `PRAGMA create_fts_index` |
+| **spatial** | Geometry/distance | `ST_Point`, `ST_Distance_Spheroid` |
+| **duckpgq** | Property graph queries | `CREATE PROPERTY GRAPH`, `GRAPH_TABLE`, `MATCH` |
 
-### Web Application Structure
-- **Framework**: Astro with TypeScript (strict mode)
-- **Content**: Auto-generated MDX pages from business clusters
-- **Search**: Pagefind integration
-- **Performance**: Optimized for 100/100 Lighthouse scores
+### Data Model (store/db.go)
 
-## Development Patterns
+**Nodes_Base** — entities with embedding + geometry + temporal tracking:
+`node_id PK, node_type, properties JSON, semantic_text, embedding FLOAT[768], latitude, longitude, geom GEOMETRY, valid_from, valid_to, is_current`
 
-### Database-First Approach
-- DuckDB for complex analytical queries
-- SQL-first data exploration
-- Async/await patterns for database operations
+**Edges_Base** — directed weighted relationships with temporal tracking:
+`edge_id PK, source_id FK, target_id FK, relationship_type, weight, valid_from, valid_to, is_current`
 
-### Content Generation
-- Automated markdown creation from JSON clusters
-- TypeScript scripts generate Astro content pages
-- Business groups organized by similarity clusters
+**Property Graph** — `domain_graph` created over these tables with vertex label `"node"` and edge label `"edge"`.
 
-### Interactive CLI Tools
-- Uses external tools: fzf, gum, bat, jq
-- Shell scripts for data exploration workflows
-- Real-time database querying and filtering
+### Hybrid Search Pipeline (store/search.go)
 
-## Key Business Query Patterns
+1. **Lexical CTE** — BM25 scoring via `fts_main_Nodes_Base.match_bm25()`
+2. **Semantic CTE** — Cosine distance on HNSW-indexed embeddings
+3. **RRF Fusion** — `1/(60+lex_rank) + 1/(60+sem_rank)`, FULL OUTER JOIN, ordered DESC
 
+### Temporal Tracking (SCD Type 2)
+
+Upserts expire the current version (`is_current=FALSE, valid_to=ts`) then insert a new version (`is_current=TRUE, valid_from=ts`). Query current state with `WHERE is_current = TRUE` or historical snapshots with `WHERE valid_from <= ts AND (valid_to IS NULL OR valid_to > ts)`.
+
+### Embedding Client (embed/client.go)
+
+Calls any OpenAI-compatible endpoint at `{endpoint_url}/v1/embeddings`. Default: llama.cpp at `localhost:8080` with `gemma` model (768-dim).
+
+## Key Conventions
+
+### Node ID Format
+`type_prefix:key_parts` — e.g., `biz:12345:1`, `neighborhood:Loop`, `activity:775`, `ward:42`
+
+### Graph Query Labels
+All SQL/PGQ MATCH patterns must label nodes as `"node"` and edges as `"edge"`. Filter by `node_type` and `relationship_type` in WHERE clauses:
 ```sql
--- Find businesses by activity type
-SELECT * FROM city_businesses WHERE activity LIKE '%Food%';
-
--- Geographic clustering
-SELECT PRI_NEIGH, COUNT(*) FROM city_businesses GROUP BY PRI_NEIGH;
-
--- License status monitoring
-SELECT * FROM city_businesses WHERE "LICENSE TERM EXPIRATION DATE" > CURRENT_DATE;
+FROM GRAPH_TABLE(domain_graph
+  MATCH (a:"node")-[e:"edge"]->(b:"node")
+  WHERE a.node_type = 'Business' AND e.relationship_type = 'LOCATED_IN'
+  COLUMNS (a.properties->>'legal_name' AS name, b.node_id AS neighborhood)
+)
 ```
 
-## External Dependencies
+Multi-hop: every node reference in every pattern must include the label, even if the same variable:
+```sql
+MATCH (p:"node")-[e1:"edge"]->(t1:"node"), (p:"node")-[e2:"edge"]->(t2:"node")
+```
 
-- **Foursquare API**: Requires `FOURSQUARE_API_KEY` environment variable
-- **CLI Tools**: fzf, gum, bat, jq (for interactive scripts)
-- **Node.js**: @duckdb/node-api, duckdb-async packages
+### Domain Configuration (domain.yaml)
+Defines node/edge types, field mappings from source data, semantic fields for embedding, embedding model/endpoint, and database path. The CLI is domain-agnostic — all domain-specific knowledge lives in this file.
 
-## File Organization
+### FTS Index
+Must be rebuilt after batch ingestion (`PRAGMA drop_fts_index` + `PRAGMA create_fts_index`). The ingest command handles this automatically.
 
-- **Root**: Database files (.db, .duckdb), raw data (.csv), processing scripts (.ts, .sh)
-- **leads-web-preview/**: Astro web application
-- **content/**: Additional content and auto-generated business group pages
-- **Taskfile.agent_mcp.yaml**: Database operation definitions
+### HNSW Persistence
+Requires `SET hnsw_enable_experimental_persistence = true` for on-disk databases (handled in `CreateIndexes`).
+
+## Dependencies
+
+- **Go**: `github.com/duckdb/duckdb-go/v2` (v2.10500.0 = DuckDB 1.5.0), cobra, viper
+- **Pinned to DuckDB 1.5.0** because duckpgq community extension is not yet available for 1.5.1
+- **Data conversion**: Node.js + `@duckdb/node-api` (for `data/to_ndjson.ts`)
+- **Embedding server**: Any OpenAI-compatible endpoint (Ollama, llama.cpp, vLLM)
+- **Task runner**: [Taskfile](https://taskfile.dev) v3
