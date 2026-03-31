@@ -31,5 +31,8 @@ node_modules/
 !test/*.ndjson
 !test/*.yaml
 
+# Browser compile output
+browser/dist/
+
 # Archive (backed up on NAS)
 archive/

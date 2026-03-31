@@ -1,0 +1,994 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Graph Search</title>
+
+<!-- Graphology (UMD) + sigma.js -->
+<script src="https://cdn.jsdelivr.net/npm/graphology@0.26.0/dist/graphology.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sigma@2.4.0/build/sigma.min.js"></script>
+
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #0f1117;
+  --surface: #1a1d27;
+  --border: #2a2d3a;
+  --text: #e0e0e6;
+  --text-dim: #8b8d9a;
+  --accent: #6c8aff;
+  --accent-dim: #3d4f8a;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  overflow: hidden;
+}
+
+#app {
+  display: grid;
+  grid-template-columns: 360px 1fr;
+  grid-template-rows: auto 1fr auto;
+  height: 100vh;
+}
+
+/* Header */
+#header {
+  grid-column: 1 / -1;
+  padding: 12px 20px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+#header h1 { font-size: 16px; font-weight: 600; }
+#header .stats { font-size: 12px; color: var(--text-dim); }
+
+/* Sidebar */
+#sidebar {
+  grid-row: 2 / 4;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Search box */
+#search-box {
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+}
+#search-input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  outline: none;
+}
+#search-input:focus { border-color: var(--accent); }
+#search-input::placeholder { color: var(--text-dim); }
+
+#search-controls {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  align-items: center;
+}
+#search-mode {
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 12px;
+}
+#search-status {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-left: auto;
+}
+
+/* Filters */
+#filters {
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+#filters summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+.filter-group { margin-bottom: 8px; }
+.filter-group label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  cursor: pointer;
+}
+.filter-group label .swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  display: inline-block;
+}
+
+/* Results list */
+#results {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+.result-card {
+  padding: 10px 12px;
+  margin-bottom: 6px;
+  border-radius: 6px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.result-card:hover, .result-card.active { border-color: var(--accent); }
+.result-card .result-type {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+}
+.result-card .result-title {
+  font-size: 13px;
+  font-weight: 500;
+  margin: 2px 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.result-card .result-score {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+.result-card .score-bar {
+  flex: 1;
+  height: 3px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.result-card .score-bar .fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+}
+.result-card .score-val {
+  font-size: 10px;
+  color: var(--text-dim);
+  min-width: 32px;
+  text-align: right;
+}
+
+/* Graph canvas */
+#graph-container {
+  grid-row: 2;
+  position: relative;
+  overflow: hidden;
+}
+#sigma-container { width: 100%; height: 100%; }
+
+/* Detail panel */
+#detail {
+  grid-column: 2;
+  grid-row: 3;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  max-height: 240px;
+  overflow-y: auto;
+  display: none;
+}
+#detail.open { display: block; }
+#detail-inner {
+  padding: 12px 20px;
+}
+#detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+#detail-header h2 { font-size: 14px; font-weight: 600; }
+#detail-close {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 18px;
+}
+#detail-content {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  font-size: 12px;
+}
+.detail-section h3 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+.props-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.props-table td {
+  padding: 2px 8px 2px 0;
+  vertical-align: top;
+}
+.props-table td:first-child {
+  font-weight: 500;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.neighbor-list { list-style: none; }
+.neighbor-list li {
+  padding: 3px 0;
+  cursor: pointer;
+}
+.neighbor-list li:hover { color: var(--accent); }
+.neighbor-list .edge-type {
+  font-size: 10px;
+  color: var(--text-dim);
+  margin-right: 4px;
+}
+
+/* Loading overlay */
+#loading {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  transition: opacity 0.3s;
+}
+#loading.hidden { opacity: 0; pointer-events: none; }
+#loading h2 { font-size: 18px; margin-bottom: 16px; }
+#loading .progress-bar {
+  width: 300px;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+#loading .progress-bar .fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 0.3s;
+  width: 0%;
+}
+#loading .progress-text {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+/* Empty states */
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+</style>
+</head>
+<body>
+
+<div id="loading">
+  <h2>Loading Graph Search</h2>
+  <div class="progress-bar"><div class="fill" id="load-progress"></div></div>
+  <div class="progress-text" id="load-text">Initializing...</div>
+</div>
+
+<div id="app">
+  <div id="header">
+    <h1 id="title">Graph Search</h1>
+    <span class="stats" id="stats"></span>
+  </div>
+
+  <div id="sidebar">
+    <div id="search-box">
+      <input type="text" id="search-input" placeholder="Search the knowledge graph..." disabled>
+      <div id="search-controls">
+        <select id="search-mode">
+          <option value="hybrid">Hybrid</option>
+          <option value="semantic">Semantic</option>
+          <option value="lexical">Lexical</option>
+        </select>
+        <span id="search-status"></span>
+      </div>
+    </div>
+    <details id="filters" open>
+      <summary>Filters</summary>
+      <div id="node-filters" class="filter-group"></div>
+      <div id="edge-filters" class="filter-group"></div>
+    </details>
+    <div id="results">
+      <div class="empty-state">Enter a search query or click a node on the graph.</div>
+    </div>
+  </div>
+
+  <div id="graph-container">
+    <div id="sigma-container"></div>
+  </div>
+
+  <div id="detail">
+    <div id="detail-inner">
+      <div id="detail-header">
+        <h2 id="detail-title"></h2>
+        <button id="detail-close">&times;</button>
+      </div>
+      <div id="detail-content"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================================
+// Inline force-directed layout (replaces ForceAtlas2 CDN dependency)
+// ============================================================================
+function forceLayout(graph, iterations = 200) {
+  const nodes = [];
+  const nodeMap = {};
+  graph.forEachNode((id, attrs) => {
+    const n = { id, x: attrs.x, y: attrs.y, dx: 0, dy: 0 };
+    nodeMap[id] = n;
+    nodes.push(n);
+  });
+
+  const edges = [];
+  graph.forEachEdge((id, attrs, source, target) => {
+    edges.push({ source: nodeMap[source], target: nodeMap[target] });
+  });
+
+  const area = Math.max(nodes.length * 100, 1000);
+  const k = Math.sqrt(area / nodes.length);
+
+  for (let iter = 0; iter < iterations; iter++) {
+    const temp = 0.1 * (1 - iter / iterations) * k;
+
+    // Repulsive forces between all node pairs
+    for (let i = 0; i < nodes.length; i++) {
+      nodes[i].dx = 0;
+      nodes[i].dy = 0;
+      for (let j = 0; j < nodes.length; j++) {
+        if (i === j) continue;
+        let dx = nodes[i].x - nodes[j].x;
+        let dy = nodes[i].y - nodes[j].y;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 0.01;
+        const force = (k * k) / dist;
+        nodes[i].dx += (dx / dist) * force;
+        nodes[i].dy += (dy / dist) * force;
+      }
+    }
+
+    // Attractive forces along edges
+    for (const e of edges) {
+      let dx = e.source.x - e.target.x;
+      let dy = e.source.y - e.target.y;
+      const dist = Math.sqrt(dx * dx + dy * dy) || 0.01;
+      const force = (dist * dist) / k;
+      const fx = (dx / dist) * force;
+      const fy = (dy / dist) * force;
+      e.source.dx -= fx;
+      e.source.dy -= fy;
+      e.target.dx += fx;
+      e.target.dy += fy;
+    }
+
+    // Apply with temperature cooling
+    for (const n of nodes) {
+      const disp = Math.sqrt(n.dx * n.dx + n.dy * n.dy) || 0.01;
+      n.x += (n.dx / disp) * Math.min(disp, temp);
+      n.y += (n.dy / disp) * Math.min(disp, temp);
+    }
+  }
+
+  // Write positions back to graph
+  for (const n of nodes) {
+    graph.setNodeAttribute(n.id, 'x', n.x);
+    graph.setNodeAttribute(n.id, 'y', n.y);
+  }
+}
+
+// ============================================================================
+// Inline Web Worker (search engine)
+// ============================================================================
+const WORKER_SOURCE = `
+import { AutoModel, AutoTokenizer, env } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.2';
+
+env.allowRemoteModels = true;
+env.allowLocalModels = false;
+
+const MODEL_ID = 'onnx-community/embeddinggemma-300m-ONNX';
+const PROMPTS = { query: 'task: search result | query: ', document: 'title: none | text: ' };
+
+let tokenizer = null;
+let model = null;
+let EMBED_DIM = 768;
+let embeddings = null;
+let nodeTexts = [];
+let nodeIds = [];
+
+// ---- BM25 index ----
+let bm25 = null;
+
+function buildBM25(docs) {
+  const k1 = 1.2, b = 0.75;
+  const N = docs.length;
+  const avgdl = docs.reduce((s, d) => s + d.length, 0) / N || 1;
+  const df = {};
+  const tfs = [];
+  const dls = [];
+
+  for (let i = 0; i < N; i++) {
+    const tokens = docs[i].toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+    dls.push(tokens.length);
+    const tf = {};
+    const seen = {};
+    for (const t of tokens) {
+      tf[t] = (tf[t] || 0) + 1;
+      if (!seen[t]) { df[t] = (df[t] || 0) + 1; seen[t] = true; }
+    }
+    tfs.push(tf);
+  }
+
+  return {
+    search(query) {
+      const qTokens = query.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+      const scores = new Float64Array(N);
+      for (const qt of qTokens) {
+        const docFreq = df[qt] || 0;
+        if (docFreq === 0) continue;
+        const idf = Math.log((N - docFreq + 0.5) / (docFreq + 0.5) + 1);
+        for (let i = 0; i < N; i++) {
+          const freq = tfs[i][qt] || 0;
+          if (freq === 0) continue;
+          const norm = freq * (k1 + 1) / (freq + k1 * (1 - b + b * dls[i] / avgdl));
+          scores[i] += idf * norm;
+        }
+      }
+      return scores;
+    }
+  };
+}
+
+// ---- Cosine similarity ----
+function cosineSimilarities(queryEmb, dbEmb, dim) {
+  const n = dbEmb.length / dim;
+  const sims = new Float64Array(n);
+  for (let i = 0; i < n; i++) {
+    const off = i * dim;
+    let dot = 0, nq = 0, nd = 0;
+    for (let j = 0; j < dim; j++) {
+      const qv = queryEmb[j], dv = dbEmb[off + j];
+      dot += qv * dv; nq += qv * qv; nd += dv * dv;
+    }
+    sims[i] = dot / (Math.sqrt(nq) * Math.sqrt(nd) || 1);
+  }
+  return sims;
+}
+
+// ---- RRF fusion ----
+function rrfFuse(lexScores, semScores, k = 60) {
+  const n = lexScores.length;
+  const lexIdx = Array.from({length: n}, (_, i) => i);
+  const semIdx = Array.from({length: n}, (_, i) => i);
+  lexIdx.sort((a, b) => lexScores[b] - lexScores[a]);
+  semIdx.sort((a, b) => semScores[b] - semScores[a]);
+
+  const scores = new Float64Array(n);
+  for (let rank = 0; rank < n; rank++) {
+    if (lexScores[lexIdx[rank]] > 0) scores[lexIdx[rank]] += 1 / (k + rank + 1);
+    if (semScores[semIdx[rank]] > 0) scores[semIdx[rank]] += 1 / (k + rank + 1);
+  }
+  return scores;
+}
+
+// ---- Embedding generation ----
+async function generateEmbedding(text) {
+  const inputs = await tokenizer([text], { padding: true, truncation: true, max_length: 512 });
+  const { sentence_embedding } = await model(inputs);
+  return Array.from(sentence_embedding.data.slice(0, EMBED_DIM));
+}
+
+// ---- Cache helpers ----
+async function getCachedFile(url) {
+  let cache;
+  try {
+    cache = await caches.open('graph-search-cache');
+    const cached = await cache.match(url);
+    if (cached) return await cached.arrayBuffer();
+  } catch (e) {}
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('Failed to fetch ' + url);
+  const buf = await res.arrayBuffer();
+  if (cache) try { await cache.put(url, new Response(buf)); } catch (e) {}
+  return buf;
+}
+
+async function getCachedJSON(url) {
+  const buf = await getCachedFile(url);
+  return JSON.parse(new TextDecoder().decode(buf));
+}
+
+// ---- Message handler ----
+self.addEventListener('message', async (e) => {
+  const msg = e.data;
+  try {
+    if (msg.type === 'init') {
+      EMBED_DIM = msg.embeddingDim || 768;
+
+      self.postMessage({ status: 'loading', progress: 0.05, text: 'Loading graph data...' });
+      const graphData = await getCachedJSON(msg.graphUrl);
+      nodeIds = graphData.nodes.map(n => n.id);
+      nodeTexts = graphData.nodes.map(n => n.semantic_text || '');
+
+      self.postMessage({ status: 'loading', progress: 0.1, text: 'Loading embeddings...' });
+      const embBuf = await getCachedFile(msg.embeddingsUrl);
+      embeddings = new Float32Array(embBuf);
+
+      self.postMessage({ status: 'loading', progress: 0.15, text: 'Building search index...' });
+      bm25 = buildBM25(nodeTexts);
+
+      self.postMessage({ status: 'loading', progress: 0.2, text: 'Loading tokenizer...' });
+      tokenizer = await AutoTokenizer.from_pretrained(MODEL_ID, {
+        progress_callback: (p) => {
+          if (p.progress != null) self.postMessage({ status: 'loading', progress: 0.2 + p.progress * 0.1, text: 'Loading tokenizer...' });
+        }
+      });
+
+      self.postMessage({ status: 'loading', progress: 0.3, text: 'Loading embedding model...' });
+      model = await AutoModel.from_pretrained(MODEL_ID, {
+        dtype: 'q8',
+        progress_callback: (p) => {
+          if (p.progress != null) self.postMessage({ status: 'loading', progress: 0.3 + p.progress * 0.6, text: 'Loading model...' });
+        }
+      });
+
+      self.postMessage({ status: 'loading', progress: 1.0, text: 'Ready!' });
+      self.postMessage({ status: 'ready' });
+    }
+
+    else if (msg.type === 'search') {
+      const { query, mode, limit } = msg;
+      let semScores = null;
+      let lexScores = null;
+
+      if (mode === 'semantic' || mode === 'hybrid') {
+        const queryEmb = await generateEmbedding(PROMPTS.query + query);
+        semScores = cosineSimilarities(queryEmb, embeddings, EMBED_DIM);
+      }
+
+      if (mode === 'lexical' || mode === 'hybrid') {
+        lexScores = bm25.search(query);
+      }
+
+      let finalScores;
+      if (mode === 'hybrid') {
+        finalScores = rrfFuse(lexScores, semScores);
+      } else if (mode === 'semantic') {
+        finalScores = semScores;
+      } else {
+        finalScores = lexScores;
+      }
+
+      const indices = Array.from({length: nodeIds.length}, (_, i) => i);
+      indices.sort((a, b) => finalScores[b] - finalScores[a]);
+
+      const top = indices.slice(0, limit || 20).filter(i => finalScores[i] > 0);
+      const maxScore = top.length > 0 ? finalScores[top[0]] : 1;
+
+      const results = top.map(i => ({
+        node_id: nodeIds[i],
+        score: finalScores[i],
+        normalized_score: finalScores[i] / maxScore,
+      }));
+
+      self.postMessage({ status: 'search_complete', data: results });
+    }
+  } catch (err) {
+    self.postMessage({ status: 'error', data: err.message });
+  }
+});
+`;
+
+// ============================================================================
+// Main Application
+// ============================================================================
+(async function main() {
+  let graphData = null;
+  let sigmaInstance = null;
+  let graph = null;
+  let selectedNode = null;
+
+  const TYPE_COLORS = [
+    '#6c8aff', '#ff6c8a', '#8aff6c', '#ffb86c', '#c78aff',
+    '#6cffda', '#ff6cd9', '#d9ff6c', '#6cd9ff', '#ff9a6c',
+  ];
+  const typeColorMap = {};
+
+  const loadProgress = document.getElementById('load-progress');
+  const loadText = document.getElementById('load-text');
+  const loadingEl = document.getElementById('loading');
+
+  function setProgress(pct, text) {
+    loadProgress.style.width = (pct * 100) + '%';
+    if (text) loadText.textContent = text;
+  }
+
+  // --- Load graph.json ---
+  setProgress(0.02, 'Loading graph data...');
+  const graphResp = await fetch('./graph.json');
+  graphData = await graphResp.json();
+
+  document.getElementById('title').textContent = graphData.meta.domain_name.replace(/_/g, ' ');
+  document.getElementById('stats').textContent =
+    graphData.meta.node_count + ' nodes / ' + graphData.meta.edge_count + ' edges';
+
+  // --- Assign colors to node types ---
+  const nodeTypes = Object.keys(graphData.config.node_definitions);
+  nodeTypes.forEach(function(t, i) { typeColorMap[t] = TYPE_COLORS[i % TYPE_COLORS.length]; });
+
+  const edgeTypes = Object.keys(graphData.config.edge_definitions);
+
+  // --- Build filters from config ---
+  const activeNodeTypes = new Set(nodeTypes);
+  const activeEdgeTypes = new Set(edgeTypes);
+
+  function renderFilters() {
+    const nf = document.getElementById('node-filters');
+    nf.innerHTML = '<div style="font-weight:600;font-size:11px;margin-bottom:4px;color:var(--text-dim)">Nodes</div>' +
+      nodeTypes.map(function(t) { return '<label>' +
+          '<input type="checkbox" data-node-type="' + t + '"' + (activeNodeTypes.has(t) ? ' checked' : '') + '>' +
+          '<span class="swatch" style="background:' + typeColorMap[t] + '"></span>' +
+          t + '</label>'; }).join('');
+
+    const ef = document.getElementById('edge-filters');
+    ef.innerHTML = '<div style="font-weight:600;font-size:11px;margin-bottom:4px;color:var(--text-dim)">Edges</div>' +
+      edgeTypes.map(function(t) { return '<label>' +
+          '<input type="checkbox" data-edge-type="' + t + '"' + (activeEdgeTypes.has(t) ? ' checked' : '') + '>' +
+          t + '</label>'; }).join('');
+
+    nf.addEventListener('change', onFilterChange);
+    ef.addEventListener('change', onFilterChange);
+  }
+
+  function onFilterChange() {
+    activeNodeTypes.clear();
+    document.querySelectorAll('#node-filters input:checked').forEach(function(el) {
+      activeNodeTypes.add(el.dataset.nodeType);
+    });
+    activeEdgeTypes.clear();
+    document.querySelectorAll('#edge-filters input:checked').forEach(function(el) {
+      activeEdgeTypes.add(el.dataset.edgeType);
+    });
+    applyFilters();
+  }
+
+  function applyFilters() {
+    if (!graph || !sigmaInstance) return;
+
+    graph.forEachNode(function(id, attrs) {
+      graph.setNodeAttribute(id, 'hidden', !activeNodeTypes.has(attrs._type));
+    });
+
+    graph.forEachEdge(function(id, attrs, source, target) {
+      var srcVisible = !graph.getNodeAttribute(source, 'hidden');
+      var tgtVisible = !graph.getNodeAttribute(target, 'hidden');
+      var typeVisible = activeEdgeTypes.has(attrs._relType);
+      graph.setEdgeAttribute(id, 'hidden', !(srcVisible && tgtVisible && typeVisible));
+    });
+
+    sigmaInstance.refresh();
+  }
+
+  renderFilters();
+
+  // --- Build Graphology graph ---
+  setProgress(0.04, 'Building graph...');
+  graph = new graphology.DirectedGraph();
+
+  var nodeIndex = {};
+  graphData.nodes.forEach(function(n, i) { nodeIndex[n.id] = { id: n.id, type: n.type, properties: n.properties, semantic_text: n.semantic_text, _index: i }; });
+
+  for (var ni = 0; ni < graphData.nodes.length; ni++) {
+    var n = graphData.nodes[ni];
+    graph.addNode(n.id, {
+      label: n.properties.name || n.properties.legal_name || n.properties.type_name || n.id,
+      x: (Math.random() - 0.5) * 100,
+      y: (Math.random() - 0.5) * 100,
+      size: 4,
+      color: typeColorMap[n.type] || '#888',
+      _type: n.type,
+    });
+  }
+
+  for (var ei = 0; ei < graphData.edges.length; ei++) {
+    var e = graphData.edges[ei];
+    if (graph.hasNode(e.source) && graph.hasNode(e.target)) {
+      try {
+        graph.addEdgeWithKey(e.id, e.source, e.target, {
+          label: e.type,
+          _relType: e.type,
+          size: 1,
+          color: '#444',
+        });
+      } catch (ex) {} // skip duplicate edges
+    }
+  }
+
+  // Scale node size by degree
+  graph.forEachNode(function(id) {
+    graph.setNodeAttribute(id, 'size', 3 + Math.sqrt(graph.degree(id)) * 2);
+  });
+
+  // --- Layout: inline force-directed ---
+  setProgress(0.05, 'Computing layout...');
+  forceLayout(graph, 300);
+
+  // --- Render sigma.js ---
+  setProgress(0.06, 'Rendering graph...');
+  var container = document.getElementById('sigma-container');
+  sigmaInstance = new Sigma(graph, container, {
+    renderLabels: true,
+    labelRenderedSizeThreshold: 8,
+    labelSize: 12,
+    labelColor: { color: '#ccc' },
+    defaultEdgeColor: '#2a2d3a',
+    defaultEdgeType: 'arrow',
+    edgeLabelSize: 10,
+  });
+
+  // --- Sigma click handlers ---
+  sigmaInstance.on('clickNode', function(event) {
+    selectNode(event.node);
+  });
+
+  sigmaInstance.on('clickStage', function() {
+    clearSelection();
+  });
+
+  // --- Spawn search worker ---
+  setProgress(0.08, 'Initializing search engine...');
+  var blob = new Blob([WORKER_SOURCE], { type: 'application/javascript' });
+  var worker = new Worker(URL.createObjectURL(blob), { type: 'module' });
+
+  worker.addEventListener('message', function(ev) {
+    var msg = ev.data;
+    if (msg.status === 'loading') {
+      setProgress(msg.progress, msg.text);
+    } else if (msg.status === 'ready') {
+      loadingEl.classList.add('hidden');
+      document.getElementById('search-input').disabled = false;
+      document.getElementById('search-input').focus();
+    } else if (msg.status === 'search_complete') {
+      onSearchResults(msg.data);
+    } else if (msg.status === 'error') {
+      console.error('Worker error:', msg.data);
+      document.getElementById('search-status').textContent = 'Error: ' + msg.data;
+    }
+  });
+
+  worker.addEventListener('error', function(ev) {
+    console.error('Worker load error:', ev);
+    document.getElementById('load-text').textContent = 'Worker failed to load. Check console.';
+  });
+
+  var baseUrl = new URL('./', window.location.href).href;
+  worker.postMessage({
+    type: 'init',
+    graphUrl: baseUrl + 'graph.json',
+    embeddingsUrl: baseUrl + 'embeddings.bin',
+    embeddingDim: graphData.meta.embedding_dim,
+  });
+
+  // --- Search input ---
+  var searchTimeout = null;
+  var searchInput = document.getElementById('search-input');
+  var searchMode = document.getElementById('search-mode');
+
+  searchInput.addEventListener('input', function() {
+    clearTimeout(searchTimeout);
+    var q = searchInput.value.trim();
+    if (q.length < 2) {
+      clearSearchResults();
+      return;
+    }
+    document.getElementById('search-status').textContent = 'Searching...';
+    searchTimeout = setTimeout(function() {
+      worker.postMessage({
+        type: 'search',
+        query: q,
+        mode: searchMode.value,
+        limit: 20,
+      });
+    }, 600);
+  });
+
+  // --- Search results rendering ---
+  function onSearchResults(results) {
+    document.getElementById('search-status').textContent =
+      results.length > 0 ? results.length + ' results' : 'No results';
+
+    var resultsEl = document.getElementById('results');
+    if (results.length === 0) {
+      resultsEl.innerHTML = '<div class="empty-state">No results found.</div>';
+      clearHighlights();
+      return;
+    }
+
+    resultsEl.innerHTML = results.map(function(r) {
+      var node = nodeIndex[r.node_id];
+      if (!node) return '';
+      var title = node.properties.name || node.properties.legal_name || node.id;
+      return '<div class="result-card" data-node-id="' + r.node_id + '">' +
+        '<div class="result-type" style="color:' + (typeColorMap[node.type] || '#888') + '">' + node.type + '</div>' +
+        '<div class="result-title">' + escapeHtml(title) + '</div>' +
+        '<div class="result-score">' +
+          '<div class="score-bar"><div class="fill" style="width:' + (r.normalized_score * 100).toFixed(0) + '%"></div></div>' +
+          '<span class="score-val">' + (r.normalized_score * 100).toFixed(0) + '%</span>' +
+        '</div></div>';
+    }).join('');
+
+    resultsEl.querySelectorAll('.result-card').forEach(function(card) {
+      card.addEventListener('click', function() {
+        selectNode(card.dataset.nodeId);
+      });
+    });
+
+    highlightResults(results);
+  }
+
+  function clearSearchResults() {
+    document.getElementById('results').innerHTML =
+      '<div class="empty-state">Enter a search query or click a node on the graph.</div>';
+    document.getElementById('search-status').textContent = '';
+    clearHighlights();
+  }
+
+  // --- Graph highlighting ---
+  var savedColors = {};
+  var savedSizes = {};
+
+  function highlightResults(results) {
+    clearHighlights();
+    var resultIds = new Set(results.map(function(r) { return r.node_id; }));
+
+    graph.forEachNode(function(id, attrs) {
+      savedColors[id] = attrs.color;
+      savedSizes[id] = attrs.size;
+      if (!resultIds.has(id)) {
+        graph.setNodeAttribute(id, 'color', '#222');
+        graph.setNodeAttribute(id, 'size', 2);
+      } else {
+        graph.setNodeAttribute(id, 'size', attrs.size + 3);
+      }
+    });
+
+    sigmaInstance.refresh();
+  }
+
+  function clearHighlights() {
+    Object.keys(savedColors).forEach(function(id) {
+      if (graph.hasNode(id)) {
+        graph.setNodeAttribute(id, 'color', savedColors[id]);
+        graph.setNodeAttribute(id, 'size', savedSizes[id] || 4);
+      }
+    });
+    savedColors = {};
+    savedSizes = {};
+    if (sigmaInstance) sigmaInstance.refresh();
+  }
+
+  // --- Node selection + detail panel ---
+  function selectNode(nodeId) {
+    selectedNode = nodeId;
+    var node = nodeIndex[nodeId];
+    if (!node) return;
+
+    document.querySelectorAll('.result-card').forEach(function(c) { c.classList.remove('active'); });
+    var activeCard = document.querySelector('.result-card[data-node-id="' + nodeId + '"]');
+    if (activeCard) activeCard.classList.add('active');
+
+    // Center camera
+    var nodePos = sigmaInstance.getNodeDisplayData(nodeId);
+    if (nodePos) {
+      sigmaInstance.getCamera().animate({ x: nodePos.x, y: nodePos.y, ratio: 0.5 }, { duration: 300 });
+    }
+
+    // Build detail panel
+    var defs = graphData.config.node_definitions[node.type];
+    var displayFields = defs ? defs.display_fields : Object.keys(node.properties);
+
+    var propsHtml = displayFields
+      .filter(function(f) { return node.properties[f] != null; })
+      .map(function(f) { return '<tr><td>' + escapeHtml(f) + '</td><td>' + escapeHtml(String(node.properties[f])) + '</td></tr>'; })
+      .join('');
+
+    // Neighbors
+    var neighbors = [];
+    if (graph.hasNode(nodeId)) {
+      graph.forEachOutEdge(nodeId, function(edge, attrs, src, tgt) {
+        var tgtNode = nodeIndex[tgt];
+        neighbors.push({ direction: 'out', edgeType: attrs._relType, nodeId: tgt,
+          label: tgtNode ? (tgtNode.properties.name || tgtNode.properties.legal_name || tgt) : tgt,
+          nodeType: tgtNode ? tgtNode.type : '' });
+      });
+      graph.forEachInEdge(nodeId, function(edge, attrs, src, tgt) {
+        var srcNode = nodeIndex[src];
+        neighbors.push({ direction: 'in', edgeType: attrs._relType, nodeId: src,
+          label: srcNode ? (srcNode.properties.name || srcNode.properties.legal_name || src) : src,
+          nodeType: srcNode ? srcNode.type : '' });
+      });
+    }
+
+    var neighborsHtml = neighbors.length > 0
+      ? '<ul class="neighbor-list">' + neighbors.map(function(nb) {
+          return '<li data-node-id="' + nb.nodeId + '">' +
+            '<span class="edge-type">' + (nb.direction === 'out' ? '&rarr;' : '&larr;') + ' ' + nb.edgeType + '</span>' +
+            '<span style="color:' + (typeColorMap[nb.nodeType] || '#888') + '">' + escapeHtml(nb.label) + '</span></li>';
+        }).join('') + '</ul>'
+      : '<div style="color:var(--text-dim)">No connections</div>';
+
+    document.getElementById('detail-title').textContent =
+      (node.properties.name || node.properties.legal_name || nodeId) + ' (' + node.type + ')';
+    document.getElementById('detail-content').innerHTML =
+      '<div class="detail-section"><h3>Properties</h3>' +
+      '<table class="props-table">' + (propsHtml || '<tr><td colspan="2" style="color:var(--text-dim)">None</td></tr>') + '</table></div>' +
+      '<div class="detail-section"><h3>Connections (' + neighbors.length + ')</h3>' + neighborsHtml + '</div>';
+
+    document.getElementById('detail').classList.add('open');
+
+    document.querySelectorAll('#detail .neighbor-list li').forEach(function(li) {
+      li.addEventListener('click', function() { selectNode(li.dataset.nodeId); });
+    });
+  }
+
+  function clearSelection() {
+    selectedNode = null;
+    document.getElementById('detail').classList.remove('open');
+    document.querySelectorAll('.result-card').forEach(function(c) { c.classList.remove('active'); });
+  }
+
+  document.getElementById('detail-close').addEventListener('click', clearSelection);
+
+  function escapeHtml(str) {
+    var el = document.createElement('span');
+    el.textContent = str;
+    return el.innerHTML;
+  }
+})();
+</script>
+</body>
+</html>

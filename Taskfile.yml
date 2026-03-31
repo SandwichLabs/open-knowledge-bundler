@@ -150,6 +150,21 @@ tasks:
       - test -f {{.TARGET_DB}}
 
   # ---------------------------------------------------------------------------
+  # Browser Compile
+  # ---------------------------------------------------------------------------
+  compile:
+    desc: "Compile a knowledge graph into a browser search app (usage: task compile -- --config test/domain.yaml)"
+    dir: ./browser
+    cmds:
+      - node compile.mjs {{.CLI_ARGS | default "--config ../test/domain.yaml --output dist/"}}
+
+  compile:serve:
+    desc: Serve the compiled browser app locally
+    dir: ./browser
+    cmds:
+      - npx serve dist/
+
+  # ---------------------------------------------------------------------------
   # Cleanup
   # ---------------------------------------------------------------------------
   clean:
