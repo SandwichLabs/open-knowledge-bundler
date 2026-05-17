@@ -2,88 +2,307 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>cbi · knowledge graph search</title>
+<title>cbi · knowledge graph</title>
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
 <style>
   :root { --bg:#0e1116; --panel:#161b22; --fg:#e6edf3; --muted:#8b949e; --accent:#58a6ff; --border:#30363d; }
   * { box-sizing: border-box; }
   body { margin:0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
-         background:var(--bg); color:var(--fg); }
-  header { padding:14px 22px; border-bottom:1px solid var(--border); display:flex; gap:16px; align-items:center; }
-  header h1 { margin:0; font-size:15px; font-weight:600; color:var(--muted); letter-spacing:0.05em; text-transform:uppercase; }
+         background:var(--bg); color:var(--fg); overflow:hidden; }
+  header { padding:10px 18px; border-bottom:1px solid var(--border); display:flex; gap:16px; align-items:center; }
+  header h1 { margin:0; font-size:14px; font-weight:600; color:var(--muted); letter-spacing:0.05em; text-transform:uppercase; }
   header .stats { color:var(--muted); font-size:13px; }
-  main { display:grid; grid-template-columns: 1fr 360px; gap:0; height:calc(100vh - 49px); }
-  #left { padding:18px 22px; overflow-y:auto; }
-  #right { border-left:1px solid var(--border); padding:18px 22px; overflow-y:auto; background:#0a0d12; }
-  input[type=text] { width:100%; padding:11px 14px; font-size:15px; background:var(--panel);
+  header .actions { margin-left:auto; display:flex; gap:8px; align-items:center; font-size:12px; color:var(--muted); }
+  header .actions button { background:var(--panel); color:var(--fg); border:1px solid var(--border);
+                           padding:5px 10px; border-radius:4px; cursor:pointer; font-size:12px; }
+  header .actions button:hover { border-color:var(--accent); }
+
+  main { display:grid; grid-template-columns: 340px 1fr 320px; height:calc(100vh - 45px); }
+
+  #left { padding:12px 16px; overflow-y:auto; border-right:1px solid var(--border); }
+  #right { border-left:1px solid var(--border); padding:14px 16px; overflow-y:auto; background:#0a0d12; }
+  #graph { position:relative; overflow:hidden; background:radial-gradient(ellipse at center, #11161e 0%, #0a0d12 100%); }
+
+  input[type=text] { width:100%; padding:9px 12px; font-size:13px; background:var(--panel);
                      color:var(--fg); border:1px solid var(--border); border-radius:6px; outline:none; }
   input[type=text]:focus { border-color:var(--accent); }
-  .row { display:flex; gap:10px; align-items:center; margin-bottom:14px; }
-  select, button { padding:9px 12px; background:var(--panel); color:var(--fg);
-                   border:1px solid var(--border); border-radius:6px; font-size:13px; cursor:pointer; }
+  .row { display:flex; gap:8px; align-items:center; margin-bottom:12px; }
+  select, button { padding:7px 10px; background:var(--panel); color:var(--fg);
+                   border:1px solid var(--border); border-radius:6px; font-size:12px; cursor:pointer; }
   button:hover { border-color:var(--accent); }
-  .hit { padding:10px 0; border-bottom:1px solid var(--border); cursor:pointer; }
+
+  .hit { padding:8px 4px; border-bottom:1px solid var(--border); cursor:pointer; }
   .hit:hover { background:#11161e; }
-  .hit .ntype { display:inline-block; font-size:11px; padding:2px 7px; border-radius:3px;
-                background:#22272e; color:var(--muted); margin-right:8px; }
-  .hit .name { font-size:14px; }
-  .hit .meta { color:var(--muted); font-size:12px; margin-top:4px; }
-  .hit .score { float:right; color:var(--muted); font-size:11px; font-family:monospace; }
-  #right h2 { margin:0 0 12px; font-size:13px; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; }
-  pre { background:#11161e; padding:10px; border-radius:6px; font-size:12px; overflow-x:auto; color:#c9d1d9; }
-  .edge { padding:6px 0; border-bottom:1px solid var(--border); font-size:13px; }
-  .edge .rel { color:var(--accent); font-family:monospace; font-size:11px; }
-  .edge .arrow { color:var(--muted); margin:0 6px; }
-  .examples { color:var(--muted); font-size:12px; margin-top:8px; }
-  .examples span { cursor:pointer; padding:2px 8px; margin-right:6px; background:var(--panel);
-                   border:1px solid var(--border); border-radius:12px; display:inline-block; margin-bottom:4px; }
+  .hit .ntype { display:inline-block; font-size:10px; padding:1px 6px; border-radius:3px;
+                color:#fff; margin-right:6px; font-weight:600; }
+  .hit .name { font-size:13px; }
+  .hit .meta { color:var(--muted); font-size:11px; margin-top:3px; }
+  .hit .score { float:right; color:var(--muted); font-size:10px; font-family:monospace; }
+
+  .section-label { font-size:10px; color:var(--muted); text-transform:uppercase;
+                   letter-spacing:0.05em; margin:14px 0 6px; }
+  .preset { display:block; padding:7px 10px; margin:4px 0; background:var(--panel);
+            border:1px solid var(--border); border-radius:6px; cursor:pointer; font-size:12px; }
+  .preset:hover { border-color:var(--accent); }
+  .preset .ptitle { font-weight:600; color:var(--fg); }
+  .preset .pdesc { color:var(--muted); font-size:11px; margin-top:2px; line-height:1.3; }
+  .preset .pargs { display:flex; gap:4px; margin-top:6px; }
+  .preset .pargs input { flex:1; padding:4px 7px; font-size:11px; background:#0a0d12;
+                         color:var(--fg); border:1px solid var(--border); border-radius:4px; outline:none; }
+  .preset .pargs button { padding:4px 10px; font-size:11px; background:var(--accent); color:#0a0d12;
+                          border:none; border-radius:4px; cursor:pointer; font-weight:600; }
+  .examples { color:var(--muted); font-size:11px; margin:8px 0 12px; }
+  .examples span { cursor:pointer; padding:2px 7px; margin-right:4px; background:var(--panel);
+                   border:1px solid var(--border); border-radius:10px; display:inline-block; margin-bottom:4px;
+                   font-size:11px; }
   .examples span:hover { color:var(--accent); border-color:var(--accent); }
-  .loading { color:var(--muted); font-size:13px; padding:10px 0; }
-  .err { color:#ff7b72; font-size:13px; padding:10px 0; }
+
+  #right h2 { margin:0 0 10px; font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; }
+  pre { background:#11161e; padding:9px; border-radius:6px; font-size:11px; overflow-x:auto; color:#c9d1d9; max-height:240px; }
+  .edge { padding:5px 0; border-bottom:1px solid var(--border); font-size:12px; }
+  .edge .rel { color:var(--accent); font-family:monospace; font-size:10px; }
+  .edge .arrow { color:var(--muted); margin:0 5px; }
+
+  .loading { color:var(--muted); font-size:12px; padding:10px 0; }
+  .err { color:#ff7b72; font-size:12px; padding:10px 0; }
+
+  /* D3 graph */
+  svg { width:100%; height:100%; cursor:grab; }
+  svg:active { cursor:grabbing; }
+  .link { stroke:#444c56; stroke-opacity:0.45; }
+  .link.highlight { stroke:#58a6ff; stroke-opacity:0.9; stroke-width:1.5px; }
+  .node { stroke:#0a0d12; stroke-width:1.5px; cursor:pointer; }
+  .node.selected { stroke:#fff; stroke-width:2.5px; }
+  .node-label { fill:var(--fg); font-size:10px; pointer-events:none;
+                paint-order:stroke; stroke:#0a0d12; stroke-width:3px; stroke-linejoin:round; }
+  .legend { position:absolute; top:10px; right:12px; background:rgba(20,24,30,0.8);
+            padding:8px 10px; border-radius:6px; font-size:11px; border:1px solid var(--border); }
+  .legend-row { display:flex; gap:6px; align-items:center; margin:2px 0; }
+  .legend-dot { width:10px; height:10px; border-radius:50%; }
+  .graph-help { position:absolute; bottom:10px; left:12px; font-size:11px; color:var(--muted);
+                background:rgba(20,24,30,0.8); padding:6px 10px; border-radius:5px; border:1px solid var(--border); }
 </style>
 </head>
 <body>
 <header>
   <h1>cbi knowledge graph</h1>
   <span class="stats" id="stats">loading…</span>
+  <div class="actions">
+    <button id="clear-graph">Clear graph</button>
+    <button id="recenter">Recenter</button>
+  </div>
 </header>
 <main>
   <section id="left">
     <div class="row">
-      <input id="q" type="text" placeholder="Search the corpus (semantic + lexical)…" autofocus>
-      <select id="limit"><option>10</option><option>25</option><option>50</option><option>100</option></select>
-      <button id="go">Search</button>
+      <input id="q" type="text" placeholder="Search…" autofocus>
+      <select id="limit"><option>10</option><option>25</option><option>50</option></select>
+      <button id="go">Go</button>
     </div>
     <div class="examples" id="examples">
       <span>Tic Tac UAP Navy pilot</span>
-      <span>Maury Island 1947 slag debris</span>
+      <span>Maury Island 1947</span>
       <span>Kenneth Arnold flying saucers</span>
       <span>FBI Hoover memo</span>
       <span>thermal infrared orb water</span>
-      <span>Persian Gulf 2020 drones</span>
     </div>
     <div id="results"></div>
+
+    <div class="section-label">Preset graph queries</div>
+    <div id="presets"><div class="loading">loading…</div></div>
   </section>
+
+  <section id="graph">
+    <svg id="svg"></svg>
+    <div class="legend" id="legend"></div>
+    <div class="graph-help">click a result to seed · click a node to expand · drag to move · scroll to zoom</div>
+  </section>
+
   <aside id="right">
-    <h2>Neighborhood</h2>
-    <div id="detail" class="loading">Select a result to see its neighborhood.</div>
+    <h2>Details</h2>
+    <div id="detail" class="loading">Click a graph node for details.</div>
   </aside>
 </main>
 
 <script>
 const $ = (id) => document.getElementById(id);
 
+// Colors by node_type — also used for legend.
+const COLORS = {
+  Document: '#f97583',
+  Incident: '#f9a857',
+  Person:   '#79b8ff',
+  Location: '#85e89d',
+  Object:   '#b392f0',
+  Agency:   '#ffab70',
+  Date:     '#6e7681',
+};
+
 async function api(path) {
   const r = await fetch(path);
   if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
   return r.json();
 }
-
-function fmtNode(r) {
-  const p = r.properties || {};
-  const name = p.name || p.title || p.summary || r.node_id;
-  return { name, role: p.role, mentions: p.mentions };
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function nodeLabel(n) {
+  const p = n.properties || {};
+  return p.name || p.title || (p.summary || '').slice(0,40) || n.node_id;
 }
 
+// ---------- D3 graph state ----------
+const svg = d3.select('#svg');
+const gAll = svg.append('g');
+const gLinks = gAll.append('g').attr('class','links');
+const gNodes = gAll.append('g').attr('class','nodes');
+const gLabels = gAll.append('g').attr('class','labels');
+
+const zoom = d3.zoom().scaleExtent([0.1, 5]).on('zoom', e => gAll.attr('transform', e.transform));
+svg.call(zoom);
+
+const state = {
+  nodes: new Map(),   // node_id -> {id, node_type, label, properties, x, y, vx, vy}
+  links: new Map(),   // key src|rel|tgt -> {source, target, relationship_type}
+  selectedId: null,
+};
+
+let simulation;
+
+function initSim(w, h) {
+  if (simulation) simulation.stop();
+  simulation = d3.forceSimulation()
+    .force('link',   d3.forceLink().id(d => d.id).distance(80).strength(0.4))
+    .force('charge', d3.forceManyBody().strength(-160))
+    .force('center', d3.forceCenter(w/2, h/2))
+    .force('collide', d3.forceCollide().radius(d => radius(d) + 4))
+    .on('tick', tick);
+}
+
+function radius(d) {
+  const m = (d.properties?.mentions) ?? 1;
+  return Math.min(14, 5 + Math.log2(1 + Number(m)));
+}
+
+function tick() {
+  gLinks.selectAll('line').attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+                          .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+  gNodes.selectAll('circle').attr('cx', d => d.x).attr('cy', d => d.y);
+  gLabels.selectAll('text').attr('x', d => d.x + radius(d) + 3).attr('y', d => d.y + 4);
+}
+
+function redraw() {
+  const nodesArr = Array.from(state.nodes.values());
+  const linksArr = Array.from(state.links.values()).map(l => ({
+    source: l.source, target: l.target, relationship_type: l.relationship_type,
+  }));
+
+  // links
+  const links = gLinks.selectAll('line').data(linksArr, l => `${l.source}|${l.relationship_type}|${l.target}`);
+  links.exit().remove();
+  links.enter().append('line').attr('class','link').attr('stroke-width', 1)
+    .append('title').text(l => l.relationship_type);
+
+  // nodes
+  const nodes = gNodes.selectAll('circle').data(nodesArr, d => d.id);
+  nodes.exit().remove();
+  const enter = nodes.enter().append('circle')
+    .attr('class', 'node')
+    .attr('r', radius)
+    .attr('fill', d => COLORS[d.node_type] || '#888')
+    .call(d3.drag()
+      .on('start', (e,d) => { if (!e.active) simulation.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+      .on('drag',  (e,d) => { d.fx = e.x; d.fy = e.y; })
+      .on('end',   (e,d) => { if (!e.active) simulation.alphaTarget(0); d.fx = null; d.fy = null; }))
+    .on('click', (_e, d) => expandNode(d.id))
+    .on('mouseover', (_e,d) => highlightNeighborhood(d.id, true))
+    .on('mouseout',  (_e,d) => highlightNeighborhood(d.id, false));
+  enter.append('title').text(d => `${d.node_type}: ${d.label}`);
+  gNodes.selectAll('circle').classed('selected', d => d.id === state.selectedId);
+
+  // labels
+  const labels = gLabels.selectAll('text').data(nodesArr, d => d.id);
+  labels.exit().remove();
+  labels.enter().append('text').attr('class','node-label').text(d => d.label.slice(0, 32));
+
+  simulation.nodes(nodesArr);
+  simulation.force('link').links(linksArr);
+  simulation.alpha(0.6).restart();
+}
+
+function highlightNeighborhood(id, on) {
+  gLinks.selectAll('line').classed('highlight', l => on && (l.source.id === id || l.target.id === id));
+}
+
+function addNode(n) {
+  if (state.nodes.has(n.node_id)) return state.nodes.get(n.node_id);
+  const rec = {
+    id: n.node_id,
+    node_type: n.node_type,
+    label: nodeLabel(n),
+    properties: n.properties,
+  };
+  state.nodes.set(n.node_id, rec);
+  return rec;
+}
+
+function addEdge(srcId, rel, tgtId) {
+  if (!state.nodes.has(srcId) || !state.nodes.has(tgtId)) return;
+  const key = `${srcId}|${rel}|${tgtId}`;
+  if (state.links.has(key)) return;
+  state.links.set(key, { source: srcId, target: tgtId, relationship_type: rel });
+}
+
+async function seedFromResult(nodeJson) {
+  addNode(nodeJson);
+  await expandNode(nodeJson.node_id);
+}
+
+async function expandNode(id) {
+  state.selectedId = id;
+  try {
+    const data = await api(`/api/node?id=${encodeURIComponent(id)}`);
+    addNode(data.node);
+    for (const e of data.edges || []) {
+      addNode({ node_id: e.other_id, node_type: e.other_type, properties: e.other_props });
+      if (e.direction === 'out') addEdge(id, e.relationship_type, e.other_id);
+      else                       addEdge(e.other_id, e.relationship_type, id);
+    }
+    redraw();
+    showDetail(data);
+  } catch (err) {
+    $('detail').innerHTML = `<div class="err">${escapeHtml(String(err))}</div>`;
+  }
+}
+
+function showDetail(data) {
+  const n = data.node;
+  const p = n.properties || {};
+  let html = `
+    <div style="margin-bottom:10px">
+      <div style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${COLORS[n.node_type] || '#888'};margin-right:6px"></div>
+      <span style="font-size:10px;color:var(--muted);text-transform:uppercase">${n.node_type}</span>
+      <div style="font-size:14px;font-weight:600;margin:3px 0">${escapeHtml(nodeLabel(n))}</div>
+      <div style="font-size:10px;color:var(--muted);font-family:monospace">${n.node_id}</div>
+    </div>
+    <pre>${escapeHtml(JSON.stringify(p, null, 2))}</pre>`;
+  if (data.edges && data.edges.length) {
+    html += `<h2 style="margin-top:14px">Edges (${data.edges.length})</h2>`;
+    for (const e of data.edges.slice(0, 80)) {
+      const other = e.other_props || {};
+      const otherName = other.name || other.title || e.other_id;
+      html += `<div class="edge">
+        <span class="rel">${e.direction === 'out' ? '→' : '←'} ${e.relationship_type}</span>
+        <span class="arrow">·</span>
+        <span style="color:${COLORS[e.other_type] || '#888'}">●</span>
+        ${escapeHtml(otherName).slice(0, 60)}
+      </div>`;
+    }
+  }
+  $('detail').innerHTML = html;
+}
+
+// ---------- Search ----------
 async function search() {
   const text = $('q').value.trim();
   if (!text) return;
@@ -92,25 +311,19 @@ async function search() {
   results.innerHTML = '<div class="loading">searching…</div>';
   try {
     const rows = await api(`/api/query?text=${encodeURIComponent(text)}&limit=${limit}`);
-    if (!rows || rows.length === 0) {
-      results.innerHTML = '<div class="loading">no results</div>';
-      return;
-    }
     results.innerHTML = '';
+    if (!rows.length) { results.innerHTML = '<div class="loading">no results</div>'; return; }
     for (const r of rows) {
-      const { name, role, mentions } = fmtNode(r);
+      const p = r.properties || {};
       const el = document.createElement('div');
       el.className = 'hit';
+      const color = COLORS[r.node_type] || '#888';
       el.innerHTML = `
         <span class="score">${(r.rrf_score ?? 0).toFixed(4)}</span>
-        <span class="ntype">${r.node_type}</span>
-        <span class="name">${escapeHtml(name).slice(0, 140)}</span>
-        <div class="meta">
-          ${role ? `<em>${escapeHtml(role)}</em> · ` : ''}
-          ${mentions ? `${mentions} mentions · ` : ''}
-          <code>${r.node_id}</code>
-        </div>`;
-      el.onclick = () => loadNeighborhood(r.node_id);
+        <span class="ntype" style="background:${color}">${r.node_type}</span>
+        <span class="name">${escapeHtml(nodeLabel(r)).slice(0,80)}</span>
+        <div class="meta">${p.role ? '<em>' + escapeHtml(p.role) + '</em> · ' : ''}<code>${r.node_id}</code></div>`;
+      el.onclick = () => seedFromResult(r);
       results.appendChild(el);
     }
   } catch (e) {
@@ -118,51 +331,100 @@ async function search() {
   }
 }
 
-async function loadNeighborhood(nodeId) {
-  const det = $('detail');
-  det.innerHTML = '<div class="loading">loading…</div>';
+// ---------- Presets ----------
+async function loadPresetList() {
   try {
-    const data = await api(`/api/node?id=${encodeURIComponent(nodeId)}`);
-    const { node, edges } = data;
-    const p = node.properties || {};
-    let html = `<div style="margin-bottom:12px">
-      <div style="font-size:11px;color:var(--muted)">${node.node_type}</div>
-      <div style="font-size:15px;font-weight:600;margin:4px 0">${escapeHtml(p.name || p.title || node.node_id)}</div>
-      <div style="font-size:11px;color:var(--muted);font-family:monospace">${node.node_id}</div>
-    </div>
-    <pre>${escapeHtml(JSON.stringify(p, null, 2))}</pre>`;
-    if (edges && edges.length) {
-      html += `<h2 style="margin-top:18px">Edges (${edges.length})</h2>`;
-      for (const e of edges) {
-        const other = e.other_props || {};
-        const otherName = other.name || other.title || e.other_id;
-        html += `<div class="edge">
-          <span class="rel">${e.direction === 'out' ? '→' : '←'} ${e.relationship_type}</span>
-          <span class="arrow">·</span>
-          <span class="ntype">${e.other_type}</span>
-          ${escapeHtml(otherName).slice(0, 80)}
-        </div>`;
+    const list = await api('/api/preset/list');
+    const root = $('presets');
+    root.innerHTML = '';
+    for (const p of list) {
+      const el = document.createElement('div');
+      el.className = 'preset';
+      let argsHTML = '';
+      if (p.has_q || p.has_n) {
+        argsHTML = '<div class="pargs">';
+        if (p.has_q) argsHTML += `<input data-arg="q" placeholder="topic (e.g. Maury Island)" value="${p.name==='topic-cluster'?'Maury Island':''}">`;
+        if (p.has_n) argsHTML += `<input data-arg="n" placeholder="N" value="20" style="max-width:50px">`;
+        argsHTML += `<button>Run</button></div>`;
       }
+      el.innerHTML = `<div class="ptitle">${escapeHtml(p.label)}</div>
+                      <div class="pdesc">${escapeHtml(p.description)}</div>${argsHTML}`;
+      const run = (e) => { e.stopPropagation(); runPreset(p, el); };
+      el.addEventListener('click', e => {
+        if (e.target.tagName === 'INPUT') return;
+        runPreset(p, el);
+      });
+      const btn = el.querySelector('button');
+      if (btn) btn.addEventListener('click', run);
+      root.appendChild(el);
     }
-    det.innerHTML = html;
   } catch (e) {
-    det.innerHTML = `<div class="err">${escapeHtml(String(e))}</div>`;
+    $('presets').innerHTML = `<div class="err">${escapeHtml(String(e))}</div>`;
   }
 }
 
-function escapeHtml(s) {
-  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function runPreset(p, el) {
+  const params = new URLSearchParams({ name: p.name });
+  if (el) {
+    for (const inp of el.querySelectorAll('input[data-arg]')) {
+      const v = inp.value.trim();
+      if (v) params.set(inp.dataset.arg, v);
+    }
+  }
+  $('detail').innerHTML = `<div class="loading">loading preset…</div>`;
+  try {
+    const sg = await api(`/api/preset?${params.toString()}`);
+    state.nodes.clear(); state.links.clear(); state.selectedId = null;
+    for (const n of sg.nodes || []) addNode(n);
+    for (const e of sg.edges || []) addEdge(e.source_id, e.relationship_type, e.target_id);
+    redraw();
+    // Recenter view.
+    svg.transition().duration(400).call(zoom.transform, d3.zoomIdentity);
+    $('detail').innerHTML = `<h2>${escapeHtml(p.label)}</h2>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:8px">${escapeHtml(p.description)}</div>
+      <div style="font-size:12px">${(sg.nodes||[]).length} nodes · ${(sg.edges||[]).length} edges</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:8px">Click any node to expand its neighborhood.</div>`;
+  } catch (e) {
+    $('detail').innerHTML = `<div class="err">${escapeHtml(String(e))}</div>`;
+  }
 }
 
-$('go').onclick = search;
-$('q').addEventListener('keydown', e => { if (e.key === 'Enter') search(); });
-$('examples').addEventListener('click', e => {
-  if (e.target.tagName === 'SPAN') { $('q').value = e.target.textContent; search(); }
-});
+// ---------- Init ----------
+function init() {
+  const rect = $('graph').getBoundingClientRect();
+  initSim(rect.width, rect.height);
 
-api('/api/stats').then(s => {
-  $('stats').textContent = `${s.domain} · ${s.nodes.toLocaleString()} nodes · ${s.edges.toLocaleString()} edges`;
-}).catch(() => {});
+  // legend
+  const lg = $('legend');
+  lg.innerHTML = Object.entries(COLORS).map(([k, v]) =>
+    `<div class="legend-row"><span class="legend-dot" style="background:${v}"></span>${k}</div>`).join('');
+
+  $('go').onclick = search;
+  $('q').addEventListener('keydown', e => { if (e.key === 'Enter') search(); });
+  $('examples').addEventListener('click', e => {
+    if (e.target.tagName === 'SPAN') { $('q').value = e.target.textContent; search(); }
+  });
+  $('clear-graph').onclick = () => {
+    state.nodes.clear(); state.links.clear(); state.selectedId = null;
+    redraw();
+    $('detail').innerHTML = '<div class="loading">Click a graph node for details.</div>';
+  };
+  $('recenter').onclick = () => svg.transition().duration(400).call(zoom.transform, d3.zoomIdentity);
+
+  window.addEventListener('resize', () => {
+    const r = $('graph').getBoundingClientRect();
+    simulation.force('center', d3.forceCenter(r.width/2, r.height/2));
+    simulation.alpha(0.3).restart();
+  });
+
+  api('/api/stats').then(s => {
+    $('stats').textContent = `${s.domain} · ${s.nodes.toLocaleString()} nodes · ${s.edges.toLocaleString()} edges`;
+  }).catch(() => {});
+
+  loadPresetList();
+}
+
+init();
 </script>
 </body>
 </html>
