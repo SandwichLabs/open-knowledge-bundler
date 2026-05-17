@@ -167,6 +167,84 @@ tasks:
   # ---------------------------------------------------------------------------
   # Cleanup
   # ---------------------------------------------------------------------------
+  # ---------------------------------------------------------------------------
+  # UFO Pipeline (PDFs -> Markdown -> entities -> NDJSON -> KG)
+  # ---------------------------------------------------------------------------
+  ufo:setup:
+    desc: Install Python deps for the docling/extraction pipeline
+    dir: ./pipeline
+    cmds:
+      - uv sync
+
+  ufo:convert:
+    desc: Convert UFO PDFs to Markdown via Docling
+    deps: [ufo:setup]
+    cmds:
+      - cd pipeline && uv run python -m pipeline.convert --in ../tmpdata/ufodata/Release_1 --out ../out/ufo {{.CLI_ARGS}}
+
+  ufo:videos:
+    desc: Sample frames from UFO MP4s and describe each via multimodal LLM
+    deps: [ufo:setup]
+    cmds:
+      - cd pipeline && uv run python -m pipeline.video_describe --in ../tmpdata/ufodata --out ../out/ufo --endpoint {{.ENDPOINT}} --model {{.MODEL}} --frames {{.FRAMES}} {{.CLI_ARGS}}
+    vars:
+      ENDPOINT: '{{.ENDPOINT | default "http://localhost:8080"}}'
+      MODEL:    '{{.MODEL | default "unsloth/Qwen3.6-35B-A3B-GGUF:UD-Q8_K_XL"}}'
+      FRAMES:   '{{.FRAMES | default "6"}}'
+
+  ufo:extract:
+    desc: Run local-LLM entity/fact extraction over markdown
+    deps: [ufo:setup]
+    cmds:
+      - cd pipeline && uv run python -m pipeline.extract --in ../out/ufo/markdown --out ../out/ufo/extractions --endpoint {{.ENDPOINT}} --model {{.MODEL}} {{.CLI_ARGS}}
+    vars:
+      ENDPOINT: '{{.ENDPOINT | default "http://localhost:8080"}}'
+      MODEL: '{{.MODEL | default "gemma"}}'
+
+  ufo:build:
+    desc: Build nodes.ndjson + edges.ndjson from extractions
+    deps: [ufo:setup]
+    cmds:
+      - cd pipeline && uv run python -m pipeline.build_ndjson --in ../out/ufo --out ../out/ufo
+
+  ufo:init:
+    desc: Initialize the UFO knowledge-graph DB
+    deps: [build]
+    dir: "{{.CLI_DIR}}"
+    cmds:
+      - ./cbi init --config ufo_domain.yaml
+
+  ufo:ingest:
+    desc: Ingest UFO nodes + edges into the knowledge graph
+    deps: [build, ufo:init]
+    dir: "{{.CLI_DIR}}"
+    cmds:
+      - ./cbi ingest --config ufo_domain.yaml --nodes ../out/ufo/nodes.ndjson --edges ../out/ufo/edges.ndjson --time {{.TIME}} --batch-size {{.BATCH_SIZE}}
+    vars:
+      TIME: '{{.TIME | default "2026-05-15"}}'
+      BATCH_SIZE: '{{.BATCH_SIZE | default "100"}}'
+    preconditions:
+      - test -f ../out/ufo/nodes.ndjson
+      - test -f ../out/ufo/edges.ndjson
+
+  ufo:pipeline:
+    desc: Full UFO pipeline — convert, extract, build, init, ingest
+    cmds:
+      - task: ufo:convert
+      - task: ufo:extract
+      - task: ufo:build
+      - task: ufo:init
+      - task: ufo:ingest
+
+  ufo:query:
+    desc: "Hybrid search against the UFO KG (usage: task ufo:query -- \"search text\")"
+    deps: [build]
+    dir: "{{.CLI_DIR}}"
+    cmds:
+      - ./cbi query --config ufo_domain.yaml --text "{{.CLI_ARGS}}" --limit {{.LIMIT}}
+    vars:
+      LIMIT: '{{.LIMIT | default "10"}}'
+
   clean:
     desc: Remove build artifacts and generated data
     cmds:

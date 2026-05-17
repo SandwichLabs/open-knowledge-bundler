@@ -1,0 +1,71 @@
+domain_name: ufo_disclosures
+embedding_dim: 768
+embedding_model: embeddinggemma
+endpoint_url: "http://localhost:11434"
+database_path: ufo.duckdb
+
+# Node Definitions
+# The Python pipeline emits fully-formed Node JSON, so mappings here are
+# minimal — just one is_key field per type so config validation passes.
+# semantic_fields is informational; semantic_text is precomputed upstream.
+node_definitions:
+  Document:
+    semantic_fields: [title, agency, abstract]
+    mappings:
+      - { source_field: doc_id, target_field: node_id, is_key: true }
+
+  Incident:
+    semantic_fields: [summary, narrative, location_text, date_text]
+    mappings:
+      - { source_field: incident_id, target_field: node_id, is_key: true }
+
+  Person:
+    semantic_fields: [name, role, affiliation]
+    mappings:
+      - { source_field: slug, target_field: node_id, is_key: true }
+
+  Location:
+    semantic_fields: [name, region, country]
+    mappings:
+      - { source_field: slug, target_field: node_id, is_key: true }
+
+  Object:
+    semantic_fields: [name, description, shape]
+    mappings:
+      - { source_field: slug, target_field: node_id, is_key: true }
+
+  Agency:
+    semantic_fields: [name, full_name]
+    mappings:
+      - { source_field: slug, target_field: node_id, is_key: true }
+
+  Date:
+    semantic_fields: [value, text]
+    mappings:
+      - { source_field: slug, target_field: node_id, is_key: true }
+
+edge_definitions:
+  MENTIONS:
+    mappings:
+      - { source_field: source_id, target_field: source_id, is_key: true }
+      - { source_field: target_id, target_field: target_id, is_key: true }
+
+  OCCURRED_AT:
+    mappings:
+      - { source_field: source_id, target_field: source_id, is_key: true }
+      - { source_field: target_id, target_field: target_id, is_key: true }
+
+  WITNESSED_BY:
+    mappings:
+      - { source_field: source_id, target_field: source_id, is_key: true }
+      - { source_field: target_id, target_field: target_id, is_key: true }
+
+  REPORTED_BY:
+    mappings:
+      - { source_field: source_id, target_field: source_id, is_key: true }
+      - { source_field: target_id, target_field: target_id, is_key: true }
+
+  REFERENCES:
+    mappings:
+      - { source_field: source_id, target_field: source_id, is_key: true }
+      - { source_field: target_id, target_field: target_id, is_key: true }

@@ -18,6 +18,10 @@ tmp/
 # Go binary
 cli/cbi
 
+# Python
+
+*.pyc
+
 # Node
 node_modules/
 
@@ -33,6 +37,8 @@ node_modules/
 
 # Browser compile output
 browser/dist/
+browser/dist-*/
 
 # Archive (backed up on NAS)
 archive/
+tmpdata/
