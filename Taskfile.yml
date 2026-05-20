@@ -245,6 +245,15 @@ tasks:
     vars:
       ADDR: '{{.ADDR | default "127.0.0.1:8765"}}'
 
+  ufo:generate:
+    desc: Build a self-contained static UFO bundle for S3/object-storage hosting
+    deps: [build]
+    dir: "{{.CLI_DIR}}"
+    cmds:
+      - ./cbi generate --config ufo_domain.yaml --output ../{{.OUT}}
+    vars:
+      OUT: '{{.OUT | default "out/ufo-static"}}'
+
   ufo:query:
     desc: "Hybrid search against the UFO KG (usage: task ufo:query -- \"search text\")"
     deps: [build]
