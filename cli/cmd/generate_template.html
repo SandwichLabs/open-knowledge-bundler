@@ -5,21 +5,21 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Graph Search</title>
 
-<!-- Graphology (UMD) + sigma.js -->
-<script src="https://cdn.jsdelivr.net/npm/graphology@0.26.0/dist/graphology.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/sigma@2.4.0/build/sigma.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
 
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg: #0f1117;
-  --surface: #1a1d27;
-  --border: #2a2d3a;
-  --text: #e0e0e6;
-  --text-dim: #8b8d9a;
-  --accent: #6c8aff;
-  --accent-dim: #3d4f8a;
+  --bg: #0a0d12;
+  --surface: #161b22;
+  --surface-2: #11161e;
+  --border: #30363d;
+  --text: #e6edf3;
+  --text-dim: #8b949e;
+  --accent: #58a6ff;
+  --accent-dim: #1f6feb33;
+  --err: #ff7b72;
 }
 
 body {
@@ -28,31 +28,36 @@ body {
   color: var(--text);
   height: 100vh;
   overflow: hidden;
+  font-size: 13px;
 }
 
 #app {
   display: grid;
-  grid-template-columns: 360px 1fr;
-  grid-template-rows: auto 1fr auto;
+  grid-template-columns: 360px 1fr 340px;
+  grid-template-rows: 46px 1fr;
   height: 100vh;
 }
 
-/* Header */
 #header {
   grid-column: 1 / -1;
-  padding: 12px 20px;
+  padding: 0 18px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
 }
-#header h1 { font-size: 16px; font-weight: 600; }
+#header h1 { font-size: 13px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-dim); }
 #header .stats { font-size: 12px; color: var(--text-dim); }
+#header .actions { margin-left: auto; display: flex; gap: 8px; }
+#header .actions button {
+  background: var(--surface-2); color: var(--text); border: 1px solid var(--border);
+  padding: 5px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; font-family: inherit;
+}
+#header .actions button:hover { border-color: var(--accent); }
 
 /* Sidebar */
 #sidebar {
-  grid-row: 2 / 4;
   background: var(--surface);
   border-right: 1px solid var(--border);
   display: flex;
@@ -60,20 +65,20 @@ body {
   overflow: hidden;
 }
 
-/* Search box */
 #search-box {
   padding: 12px;
   border-bottom: 1px solid var(--border);
 }
 #search-input {
   width: 100%;
-  padding: 10px 12px;
-  border-radius: 8px;
+  padding: 9px 12px;
+  border-radius: 6px;
   border: 1px solid var(--border);
-  background: var(--bg);
+  background: var(--surface-2);
   color: var(--text);
-  font-size: 14px;
+  font-size: 13px;
   outline: none;
+  font-family: inherit;
 }
 #search-input:focus { border-color: var(--accent); }
 #search-input::placeholder { color: var(--text-dim); }
@@ -88,34 +93,31 @@ body {
   padding: 4px 8px;
   border-radius: 4px;
   border: 1px solid var(--border);
-  background: var(--bg);
+  background: var(--surface-2);
   color: var(--text);
   font-size: 12px;
+  font-family: inherit;
 }
-#search-status {
-  font-size: 11px;
-  color: var(--text-dim);
-  margin-left: auto;
-}
+#search-status { font-size: 11px; color: var(--text-dim); margin-left: auto; }
 
-/* Filters */
-#filters {
+.panel {
   padding: 12px;
   border-bottom: 1px solid var(--border);
   font-size: 12px;
-  max-height: 200px;
-  overflow-y: auto;
 }
-#filters summary {
+.panel summary {
   cursor: pointer;
   font-weight: 600;
-  font-size: 11px;
+  font-size: 10px;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.06em;
   color: var(--text-dim);
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
-.filter-group { margin-bottom: 8px; }
+#filters { max-height: 200px; overflow-y: auto; }
+#presets { max-height: 280px; overflow-y: auto; }
+
+.filter-group { margin-bottom: 6px; }
 .filter-group label {
   display: flex;
   align-items: center;
@@ -130,186 +132,6 @@ body {
   display: inline-block;
 }
 
-/* Results list */
-#results {
-  flex: 1;
-  overflow-y: auto;
-  padding: 8px;
-}
-.result-card {
-  padding: 10px 12px;
-  margin-bottom: 6px;
-  border-radius: 6px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  cursor: pointer;
-  transition: border-color 0.15s;
-}
-.result-card:hover, .result-card.active { border-color: var(--accent); }
-.result-card .result-type {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--text-dim);
-}
-.result-card .result-title {
-  font-size: 13px;
-  font-weight: 500;
-  margin: 2px 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.result-card .result-score {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 4px;
-}
-.result-card .score-bar {
-  flex: 1;
-  height: 3px;
-  background: var(--border);
-  border-radius: 2px;
-  overflow: hidden;
-}
-.result-card .score-bar .fill {
-  height: 100%;
-  background: var(--accent);
-  border-radius: 2px;
-}
-.result-card .score-val {
-  font-size: 10px;
-  color: var(--text-dim);
-  min-width: 32px;
-  text-align: right;
-}
-
-/* Graph canvas */
-#graph-container {
-  grid-row: 2;
-  position: relative;
-  overflow: hidden;
-}
-#sigma-container { width: 100%; height: 100%; }
-
-/* Detail panel */
-#detail {
-  grid-column: 2;
-  grid-row: 3;
-  background: var(--surface);
-  border-top: 1px solid var(--border);
-  max-height: 240px;
-  overflow-y: auto;
-  display: none;
-}
-#detail.open { display: block; }
-#detail-inner {
-  padding: 12px 20px;
-}
-#detail-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-}
-#detail-header h2 { font-size: 14px; font-weight: 600; }
-#detail-close {
-  background: none;
-  border: none;
-  color: var(--text-dim);
-  cursor: pointer;
-  font-size: 18px;
-}
-#detail-content {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  font-size: 12px;
-}
-.detail-section h3 {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--text-dim);
-  margin-bottom: 6px;
-}
-.props-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-.props-table td {
-  padding: 2px 8px 2px 0;
-  vertical-align: top;
-}
-.props-table td:first-child {
-  font-weight: 500;
-  color: var(--text-dim);
-  white-space: nowrap;
-}
-.neighbor-list { list-style: none; }
-.neighbor-list li {
-  padding: 3px 0;
-  cursor: pointer;
-}
-.neighbor-list li:hover { color: var(--accent); }
-.neighbor-list .edge-type {
-  font-size: 10px;
-  color: var(--text-dim);
-  margin-right: 4px;
-}
-
-/* Loading overlay */
-#loading {
-  position: fixed;
-  inset: 0;
-  background: var(--bg);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  z-index: 100;
-  transition: opacity 0.3s;
-}
-#loading.hidden { opacity: 0; pointer-events: none; }
-#loading h2 { font-size: 18px; margin-bottom: 16px; }
-#loading .progress-bar {
-  width: 300px;
-  height: 4px;
-  background: var(--border);
-  border-radius: 2px;
-  overflow: hidden;
-  margin-bottom: 8px;
-}
-#loading .progress-bar .fill {
-  height: 100%;
-  background: var(--accent);
-  border-radius: 2px;
-  transition: width 0.3s;
-  width: 0%;
-}
-#loading .progress-text {
-  font-size: 12px;
-  color: var(--text-dim);
-}
-
-/* Presets */
-#presets {
-  padding: 12px;
-  border-bottom: 1px solid var(--border);
-  font-size: 12px;
-  max-height: 280px;
-  overflow-y: auto;
-}
-#presets summary {
-  cursor: pointer;
-  font-weight: 600;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--text-dim);
-  margin-bottom: 6px;
-}
 .preset-row {
   display: flex;
   gap: 6px;
@@ -321,7 +143,7 @@ body {
   text-align: left;
   padding: 6px 8px;
   border: 1px solid var(--border);
-  background: var(--bg);
+  background: var(--surface-2);
   color: var(--text);
   border-radius: 4px;
   cursor: pointer;
@@ -332,7 +154,7 @@ body {
 .preset-q, .preset-n {
   padding: 5px 6px;
   border: 1px solid var(--border);
-  background: var(--bg);
+  background: var(--surface-2);
   color: var(--text);
   border-radius: 4px;
   font-size: 12px;
@@ -361,13 +183,230 @@ body {
   font-family: inherit;
 }
 
-/* Empty states */
-.empty-state {
-  text-align: center;
-  padding: 40px 20px;
+/* Results */
+#results {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+.result-card {
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  border-radius: 6px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.result-card:hover, .result-card.active { border-color: var(--accent); }
+.result-card .result-type {
+  display: inline-block;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 1px 6px;
+  border-radius: 3px;
+  color: #0a0d12;
+  font-weight: 600;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+.result-card .result-title {
+  font-size: 13px;
+  font-weight: 500;
+  margin-top: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.result-card .result-meta {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-family: monospace;
+  margin-top: 3px;
+}
+.result-card .result-score {
+  float: right;
+  font-size: 10px;
+  font-family: monospace;
+  color: var(--text-dim);
+}
+
+/* Graph */
+#graph-container {
+  position: relative;
+  overflow: hidden;
+  background: radial-gradient(ellipse at center, #11161e 0%, #0a0d12 100%);
+}
+#svg { width: 100%; height: 100%; cursor: grab; display: block; }
+#svg:active { cursor: grabbing; }
+.link { stroke: #444c56; stroke-opacity: 0.45; }
+.link.highlight { stroke: var(--accent); stroke-opacity: 0.9; stroke-width: 1.5px; }
+.node { stroke: #0a0d12; stroke-width: 1.5px; cursor: pointer; }
+.node.selected { stroke: #fff; stroke-width: 2.5px; }
+.node-label {
+  fill: var(--text);
+  font-size: 10px;
+  pointer-events: none;
+  paint-order: stroke;
+  stroke: #0a0d12;
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+
+.graph-help {
+  position: absolute;
+  bottom: 10px;
+  left: 12px;
+  background: rgba(20, 24, 30, 0.8);
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  pointer-events: none;
+}
+.legend {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  background: rgba(20, 24, 30, 0.85);
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  border: 1px solid var(--border);
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
+}
+.legend-row { display: flex; gap: 6px; align-items: center; margin: 2px 0; }
+.legend-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+
+#graph-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   color: var(--text-dim);
   font-size: 13px;
+  pointer-events: none;
+  text-align: center;
+  padding: 24px;
 }
+#graph-empty.hidden { display: none; }
+
+/* Detail */
+#detail {
+  background: var(--surface-2);
+  border-left: 1px solid var(--border);
+  overflow-y: auto;
+  padding: 14px 16px;
+}
+#detail h2 {
+  font-size: 11px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 10px;
+}
+#detail .empty {
+  color: var(--text-dim);
+  font-size: 12px;
+  padding: 14px 0;
+  text-align: center;
+}
+#detail .detail-head {
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+#detail .detail-head .badge {
+  display: inline-block;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 7px;
+  border-radius: 3px;
+  color: #0a0d12;
+  font-weight: 600;
+}
+#detail .detail-head .title {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 5px 0 3px;
+  line-height: 1.3;
+}
+#detail .detail-head .id {
+  font-size: 10px;
+  color: var(--text-dim);
+  font-family: monospace;
+  word-break: break-all;
+}
+#detail .section { margin-bottom: 14px; }
+#detail .section h3 {
+  font-size: 10px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 6px;
+}
+.props-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.props-table td { padding: 3px 8px 3px 0; vertical-align: top; line-height: 1.35; }
+.props-table td:first-child {
+  font-weight: 500;
+  color: var(--text-dim);
+  white-space: nowrap;
+  font-family: monospace;
+  font-size: 11px;
+}
+.neighbor-list { list-style: none; max-height: 360px; overflow-y: auto; }
+.neighbor-list li {
+  padding: 4px 0;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1.35;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.neighbor-list li:hover .nb-label { color: var(--accent); }
+.neighbor-list .edge-type {
+  font-size: 10px;
+  color: var(--text-dim);
+  font-family: monospace;
+}
+.neighbor-list .nb-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+
+/* Loading overlay */
+#loading {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  transition: opacity 0.3s;
+}
+#loading.hidden { opacity: 0; pointer-events: none; }
+#loading h2 { font-size: 18px; margin-bottom: 16px; }
+#loading .progress-bar {
+  width: 320px;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+#loading .progress-bar .fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 0.3s;
+  width: 0%;
+}
+#loading .progress-text { font-size: 12px; color: var(--text-dim); }
 </style>
 </head>
 <body>
@@ -382,6 +421,12 @@ body {
   <div id="header">
     <h1 id="title">Graph Search</h1>
     <span class="stats" id="stats"></span>
+    <div class="actions">
+      <span id="view-status" style="font-size:11px;color:var(--text-dim)"></span>
+      <button id="show-hubs" title="Show the top-degree hub nodes">Hubs</button>
+      <button id="recenter" title="Recenter the view">Recenter</button>
+      <button id="clear-graph" title="Clear the graph view">Clear</button>
+    </div>
   </div>
 
   <div id="sidebar">
@@ -396,12 +441,12 @@ body {
         <span id="search-status"></span>
       </div>
     </div>
-    <details id="filters" open>
+    <details id="filters" class="panel" open>
       <summary>Filters</summary>
       <div id="node-filters" class="filter-group"></div>
       <div id="edge-filters" class="filter-group"></div>
     </details>
-    <details id="presets" open>
+    <details id="presets" class="panel" open>
       <summary>Presets</summary>
       <div id="preset-list"></div>
       <div id="preset-active">
@@ -410,95 +455,30 @@ body {
       </div>
     </details>
     <div id="results">
-      <div class="empty-state">Enter a search query or click a node on the graph.</div>
+      <div style="color:var(--text-dim);padding:24px 12px;text-align:center;font-size:12px">
+        Search or pick a preset to populate the graph.
+      </div>
     </div>
   </div>
 
   <div id="graph-container">
-    <div id="sigma-container"></div>
+    <svg id="svg"></svg>
+    <div class="legend" id="legend"></div>
+    <div id="graph-empty" class="hidden">Graph is empty — search for something or click a preset.</div>
+    <div class="graph-help">click a node to expand · drag nodes · scroll to zoom</div>
   </div>
 
   <div id="detail">
-    <div id="detail-inner">
-      <div id="detail-header">
-        <h2 id="detail-title"></h2>
-        <button id="detail-close">&times;</button>
-      </div>
-      <div id="detail-content"></div>
+    <h2>Details</h2>
+    <div id="detail-body">
+      <div class="empty">Click a graph node or a result to see its properties and connections.</div>
     </div>
   </div>
 </div>
 
 <script>
 // ============================================================================
-// Inline force-directed layout (replaces ForceAtlas2 CDN dependency)
-// ============================================================================
-function forceLayout(graph, iterations = 200) {
-  const nodes = [];
-  const nodeMap = {};
-  graph.forEachNode((id, attrs) => {
-    const n = { id, x: attrs.x, y: attrs.y, dx: 0, dy: 0 };
-    nodeMap[id] = n;
-    nodes.push(n);
-  });
-
-  const edges = [];
-  graph.forEachEdge((id, attrs, source, target) => {
-    edges.push({ source: nodeMap[source], target: nodeMap[target] });
-  });
-
-  const area = Math.max(nodes.length * 100, 1000);
-  const k = Math.sqrt(area / nodes.length);
-
-  for (let iter = 0; iter < iterations; iter++) {
-    const temp = 0.1 * (1 - iter / iterations) * k;
-
-    // Repulsive forces between all node pairs
-    for (let i = 0; i < nodes.length; i++) {
-      nodes[i].dx = 0;
-      nodes[i].dy = 0;
-      for (let j = 0; j < nodes.length; j++) {
-        if (i === j) continue;
-        let dx = nodes[i].x - nodes[j].x;
-        let dy = nodes[i].y - nodes[j].y;
-        const dist = Math.sqrt(dx * dx + dy * dy) || 0.01;
-        const force = (k * k) / dist;
-        nodes[i].dx += (dx / dist) * force;
-        nodes[i].dy += (dy / dist) * force;
-      }
-    }
-
-    // Attractive forces along edges
-    for (const e of edges) {
-      let dx = e.source.x - e.target.x;
-      let dy = e.source.y - e.target.y;
-      const dist = Math.sqrt(dx * dx + dy * dy) || 0.01;
-      const force = (dist * dist) / k;
-      const fx = (dx / dist) * force;
-      const fy = (dy / dist) * force;
-      e.source.dx -= fx;
-      e.source.dy -= fy;
-      e.target.dx += fx;
-      e.target.dy += fy;
-    }
-
-    // Apply with temperature cooling
-    for (const n of nodes) {
-      const disp = Math.sqrt(n.dx * n.dx + n.dy * n.dy) || 0.01;
-      n.x += (n.dx / disp) * Math.min(disp, temp);
-      n.y += (n.dy / disp) * Math.min(disp, temp);
-    }
-  }
-
-  // Write positions back to graph
-  for (const n of nodes) {
-    graph.setNodeAttribute(n.id, 'x', n.x);
-    graph.setNodeAttribute(n.id, 'y', n.y);
-  }
-}
-
-// ============================================================================
-// Inline Web Worker (search engine)
+// Inline Web Worker (search engine + data loader)
 // ============================================================================
 const WORKER_SOURCE = `
 import { AutoModel, AutoTokenizer, env } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.2';
@@ -591,14 +571,12 @@ function rrfFuse(lexScores, semScores, k = 60) {
   return scores;
 }
 
-// ---- Embedding generation ----
 async function generateEmbedding(text) {
   const inputs = await tokenizer([text], { padding: true, truncation: true, max_length: 512 });
   const { sentence_embedding } = await model(inputs);
   return Array.from(sentence_embedding.data.slice(0, EMBED_DIM));
 }
 
-// ---- Cache + progress helpers ----
 async function fetchWithProgress(url, label, base, scale) {
   const res = await fetch(url);
   if (!res.ok) throw new Error('Failed to fetch ' + url);
@@ -643,15 +621,11 @@ async function getCachedFile(url, label, base, scale) {
   return buf;
 }
 
-// ---- Message handler ----
 self.addEventListener('message', async (e) => {
   const msg = e.data;
   try {
     if (msg.type === 'init') {
       EMBED_DIM = msg.embeddingDim || 768;
-
-      // 1. Graph data — fetch with byte-level progress, then hand off to the main
-      //    thread so it can start rendering while we keep loading embeddings + model.
       const graphBuf = await getCachedFile(msg.graphUrl, 'Loading graph', 0.00, 0.15);
       const graphData = JSON.parse(new TextDecoder().decode(new Uint8Array(graphBuf)));
       nodeIds = graphData.nodes.map(n => n.id);
@@ -659,7 +633,6 @@ self.addEventListener('message', async (e) => {
       EMBED_DIM = (graphData.meta && graphData.meta.embedding_dim) || EMBED_DIM;
       self.postMessage({ status: 'graph_loaded', data: graphData });
 
-      // 2. Embeddings — large; progress-streamed in the worker so the UI stays live.
       const embBuf = await getCachedFile(msg.embeddingsUrl, 'Loading embeddings', 0.15, 0.20);
       embeddings = new Float32Array(embBuf);
 
@@ -673,7 +646,7 @@ self.addEventListener('message', async (e) => {
         }
       });
 
-      self.postMessage({ status: 'loading', progress: 0.45, text: 'Loading embedding model (≈200MB on first visit, cached after)...' });
+      self.postMessage({ status: 'loading', progress: 0.45, text: 'Loading embedding model (~200MB on first visit, cached after)...' });
       model = await AutoModel.from_pretrained(MODEL_ID, {
         dtype: 'q8',
         progress_callback: (p) => {
@@ -694,26 +667,19 @@ self.addEventListener('message', async (e) => {
         const queryEmb = await generateEmbedding(PROMPTS.query + query);
         semScores = cosineSimilarities(queryEmb, embeddings, EMBED_DIM);
       }
-
       if (mode === 'lexical' || mode === 'hybrid') {
         lexScores = bm25.search(query);
       }
 
       let finalScores;
-      if (mode === 'hybrid') {
-        finalScores = rrfFuse(lexScores, semScores);
-      } else if (mode === 'semantic') {
-        finalScores = semScores;
-      } else {
-        finalScores = lexScores;
-      }
+      if (mode === 'hybrid') finalScores = rrfFuse(lexScores, semScores);
+      else if (mode === 'semantic') finalScores = semScores;
+      else finalScores = lexScores;
 
       const indices = Array.from({length: nodeIds.length}, (_, i) => i);
       indices.sort((a, b) => finalScores[b] - finalScores[a]);
-
       const top = indices.slice(0, limit || 20).filter(i => finalScores[i] > 0);
       const maxScore = top.length > 0 ? finalScores[top[0]] : 1;
-
       const results = top.map(i => ({
         node_id: nodeIds[i],
         score: finalScores[i],
@@ -732,184 +698,375 @@ self.addEventListener('message', async (e) => {
 // Main Application
 // ============================================================================
 (async function main() {
-  let graphData = null;
-  let sigmaInstance = null;
-  let graph = null;
-  let selectedNode = null;
+  const $ = (id) => document.getElementById(id);
 
+  // ---- Constants / palette ------------------------------------------------
+  const MAX_VISIBLE = 200;             // hard cap on rendered nodes
+  const INITIAL_HUBS = 60;             // default initial view size
   const TYPE_COLORS = [
-    '#6c8aff', '#ff6c8a', '#8aff6c', '#ffb86c', '#c78aff',
-    '#6cffda', '#ff6cd9', '#d9ff6c', '#6cd9ff', '#ff9a6c',
+    '#79b8ff', '#f97583', '#85e89d', '#f9a857', '#b392f0',
+    '#ffab70', '#6e7681', '#6cd9ff', '#ff6cd9', '#d9ff6c',
   ];
   const typeColorMap = {};
 
-  const loadProgress = document.getElementById('load-progress');
-  const loadText = document.getElementById('load-text');
-  const loadingEl = document.getElementById('loading');
-
+  // ---- Loading overlay ----------------------------------------------------
+  const loadProgress = $('load-progress');
+  const loadText = $('load-text');
+  const loadingEl = $('loading');
   function setProgress(pct, text) {
     loadProgress.style.width = (pct * 100) + '%';
     if (text) loadText.textContent = text;
   }
 
-  // --- Spawn search worker FIRST. It streams graph.json + embeddings.bin in
-  //     the background with byte-level progress events so the main thread
-  //     never blocks waiting on the network. ---
-  setProgress(0.01, 'Starting worker...');
-  var blob = new Blob([WORKER_SOURCE], { type: 'application/javascript' });
-  var worker = new Worker(URL.createObjectURL(blob), { type: 'module' });
+  function escapeHtml(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+  function nodeLabel(n) {
+    const p = (n && n.properties) || {};
+    return p.name || p.title || p.legal_name || p.type_name || (p.summary || '').slice(0, 40) || (n && n.id) || '';
+  }
 
-  var graphLoadedResolve;
-  var graphLoadedPromise = new Promise(function(res) { graphLoadedResolve = res; });
+  // ---- Worker spawn (loads graph.json + embeddings.bin in the background)
+  setProgress(0.005, 'Starting worker...');
+  const blob = new Blob([WORKER_SOURCE], { type: 'application/javascript' });
+  const worker = new Worker(URL.createObjectURL(blob), { type: 'module' });
 
-  worker.addEventListener('message', function(ev) {
-    var msg = ev.data;
+  let graphLoadedResolve;
+  const graphLoadedPromise = new Promise((res) => { graphLoadedResolve = res; });
+
+  worker.addEventListener('message', (ev) => {
+    const msg = ev.data;
     if (msg.status === 'loading') {
       setProgress(msg.progress, msg.text);
     } else if (msg.status === 'graph_loaded') {
       graphLoadedResolve(msg.data);
     } else if (msg.status === 'ready') {
       loadingEl.classList.add('hidden');
-      document.getElementById('search-input').disabled = false;
-      document.getElementById('search-input').focus();
+      $('search-input').disabled = false;
+      $('search-input').focus();
     } else if (msg.status === 'search_complete') {
       onSearchResults(msg.data);
     } else if (msg.status === 'error') {
       console.error('Worker error:', msg.data);
-      document.getElementById('search-status').textContent = 'Error: ' + msg.data;
+      $('search-status').textContent = 'Error: ' + msg.data;
     }
   });
 
-  worker.addEventListener('error', function(ev) {
+  worker.addEventListener('error', (ev) => {
     console.error('Worker load error:', ev);
-    document.getElementById('load-text').textContent = 'Worker failed to load. Check console.';
+    $('load-text').textContent = 'Worker failed to load. Check console.';
   });
 
-  // Fetch manifest first (tiny) to discover the bundle version. We append it
-  // as ?v=... to graph.json / embeddings.bin so that regenerating the bundle
-  // never serves stale data from the browser Cache API.
-  var baseUrl = new URL('./', window.location.href).href;
-  setProgress(0.005, 'Reading manifest...');
-  var manifest = {};
+  // Cache-bust graph + embeddings against bundle version.
+  const baseUrl = new URL('./', window.location.href).href;
+  setProgress(0.003, 'Reading manifest...');
+  let manifest = {};
   try {
-    var manifestResp = await fetch(baseUrl + 'manifest.json', { cache: 'no-store' });
+    const manifestResp = await fetch(baseUrl + 'manifest.json', { cache: 'no-store' });
     manifest = await manifestResp.json();
   } catch (e) { console.warn('manifest.json fetch failed', e); }
-  var bundleVersion = manifest.generated_at || String(Date.now());
-  var cacheBust = '?v=' + encodeURIComponent(bundleVersion);
+  const bundleVersion = manifest.generated_at || String(Date.now());
+  const cacheBust = '?v=' + encodeURIComponent(bundleVersion);
   worker.postMessage({
     type: 'init',
     graphUrl: baseUrl + 'graph.json' + cacheBust,
     embeddingsUrl: baseUrl + 'embeddings.bin' + cacheBust,
   });
 
-  // Block until the worker has finished streaming + parsing graph.json. The
-  // embeddings + model continue loading in the background after this resolves.
-  graphData = await graphLoadedPromise;
+  const graphData = await graphLoadedPromise;
 
-  document.getElementById('title').textContent = graphData.meta.domain_name.replace(/_/g, ' ');
-  document.getElementById('stats').textContent =
-    graphData.meta.node_count + ' nodes / ' + graphData.meta.edge_count + ' edges';
+  // ---- Build in-memory indices --------------------------------------------
+  const nodeIndex = new Map();    // id -> {id, type, properties, semantic_text}
+  const outEdges = new Map();     // id -> [{source,target,type,weight}]
+  const inEdges = new Map();      // id -> [{...}]
+  const degree = new Map();       // id -> number
 
-  // --- Assign colors to node types + a circular type-cluster center
-  //     (cheap O(N) scatter; replaces the unusable O(N²)×iter force layout). ---
+  for (const n of graphData.nodes) {
+    nodeIndex.set(n.id, n);
+    degree.set(n.id, 0);
+  }
+  for (const e of graphData.edges) {
+    if (!nodeIndex.has(e.source) || !nodeIndex.has(e.target)) continue;
+    if (!outEdges.has(e.source)) outEdges.set(e.source, []);
+    if (!inEdges.has(e.target)) inEdges.set(e.target, []);
+    outEdges.get(e.source).push(e);
+    inEdges.get(e.target).push(e);
+    degree.set(e.source, (degree.get(e.source) || 0) + 1);
+    degree.set(e.target, (degree.get(e.target) || 0) + 1);
+  }
+
+  // ---- Header / colors / legend -------------------------------------------
+  $('title').textContent = (graphData.meta.domain_name || 'graph search').replace(/_/g, ' ');
+  $('stats').textContent = graphData.meta.node_count.toLocaleString() + ' nodes / ' + graphData.meta.edge_count.toLocaleString() + ' edges';
+
   const nodeTypes = Object.keys(graphData.config.node_definitions);
-  const typeCenters = {};
-  nodeTypes.forEach(function(t, i) {
-    typeColorMap[t] = TYPE_COLORS[i % TYPE_COLORS.length];
-    var angle = (i / Math.max(1, nodeTypes.length)) * Math.PI * 2;
-    typeCenters[t] = { x: Math.cos(angle) * 240, y: Math.sin(angle) * 240 };
-  });
-
+  nodeTypes.forEach((t, i) => { typeColorMap[t] = TYPE_COLORS[i % TYPE_COLORS.length]; });
   const edgeTypes = Object.keys(graphData.config.edge_definitions);
-
-  // --- Build filters from config ---
   const activeNodeTypes = new Set(nodeTypes);
   const activeEdgeTypes = new Set(edgeTypes);
 
-  function renderFilters() {
-    const nf = document.getElementById('node-filters');
-    nf.innerHTML = '<div style="font-weight:600;font-size:11px;margin-bottom:4px;color:var(--text-dim)">Nodes</div>' +
-      nodeTypes.map(function(t) { return '<label>' +
-          '<input type="checkbox" data-node-type="' + t + '"' + (activeNodeTypes.has(t) ? ' checked' : '') + '>' +
-          '<span class="swatch" style="background:' + typeColorMap[t] + '"></span>' +
-          t + '</label>'; }).join('');
+  $('legend').innerHTML = nodeTypes.map(t =>
+    '<div class="legend-row"><span class="legend-dot" style="background:' + typeColorMap[t] + '"></span>' + escapeHtml(t) + '</div>'
+  ).join('');
 
-    const ef = document.getElementById('edge-filters');
-    ef.innerHTML = '<div style="font-weight:600;font-size:11px;margin-bottom:4px;color:var(--text-dim)">Edges</div>' +
-      edgeTypes.map(function(t) { return '<label>' +
-          '<input type="checkbox" data-edge-type="' + t + '"' + (activeEdgeTypes.has(t) ? ' checked' : '') + '>' +
-          t + '</label>'; }).join('');
+  // ---- D3 graph state -----------------------------------------------------
+  const svg = d3.select('#svg');
+  const gAll = svg.append('g');
+  const gLinks = gAll.append('g').attr('class', 'links');
+  const gNodes = gAll.append('g').attr('class', 'nodes');
+  const gLabels = gAll.append('g').attr('class', 'labels');
+  const zoom = d3.zoom().scaleExtent([0.1, 5]).on('zoom', (e) => gAll.attr('transform', e.transform));
+  svg.call(zoom);
 
-    nf.addEventListener('change', onFilterChange);
-    ef.addEventListener('change', onFilterChange);
+  const state = {
+    nodes: new Map(),   // id -> {id, node_type, label, properties, x, y, fx, fy}
+    links: new Map(),   // key src|rel|tgt -> {source, target, relationship_type}
+    selectedId: null,
+  };
+
+  let simulation;
+  function radius(d) {
+    const m = (d.properties && d.properties.mentions) || 0;
+    const mentBoost = Number(m) > 0 ? Math.log2(1 + Number(m)) : 0;
+    const deg = degree.get(d.id) || 0;
+    return Math.min(14, 5 + mentBoost + Math.sqrt(deg) * 0.4);
+  }
+  function tick() {
+    gLinks.selectAll('line')
+      .attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+      .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+    gNodes.selectAll('circle')
+      .attr('cx', d => d.x).attr('cy', d => d.y);
+    gLabels.selectAll('text')
+      .attr('x', d => d.x + radius(d) + 3).attr('y', d => d.y + 4);
+  }
+  function initSim() {
+    const rect = $('graph-container').getBoundingClientRect();
+    if (simulation) simulation.stop();
+    simulation = d3.forceSimulation()
+      .force('link',    d3.forceLink().id(d => d.id).distance(80).strength(0.4))
+      .force('charge',  d3.forceManyBody().strength(-160))
+      .force('center',  d3.forceCenter(rect.width / 2, rect.height / 2))
+      .force('collide', d3.forceCollide().radius(d => radius(d) + 4))
+      .on('tick', tick);
+  }
+  initSim();
+
+  function highlightNeighborhood(id, on) {
+    gLinks.selectAll('line').classed('highlight', l => on && (l.source.id === id || l.target.id === id));
   }
 
+  function addNodeToView(id) {
+    if (state.nodes.has(id)) return state.nodes.get(id);
+    if (state.nodes.size >= MAX_VISIBLE) return null;
+    const n = nodeIndex.get(id);
+    if (!n) return null;
+    const rec = {
+      id,
+      node_type: n.type,
+      label: nodeLabel(n),
+      properties: n.properties || {},
+    };
+    state.nodes.set(id, rec);
+    return rec;
+  }
+  function addEdgeToView(srcId, rel, tgtId) {
+    if (!state.nodes.has(srcId) || !state.nodes.has(tgtId)) return;
+    const key = srcId + '|' + rel + '|' + tgtId;
+    if (state.links.has(key)) return;
+    state.links.set(key, { source: srcId, target: tgtId, relationship_type: rel });
+  }
+  // After adding nodes, copy any edges from the graph where both endpoints are visible.
+  function fillEdgesBetweenVisible() {
+    state.nodes.forEach((_, id) => {
+      const outs = outEdges.get(id) || [];
+      for (const e of outs) {
+        if (state.nodes.has(e.target)) addEdgeToView(e.source, e.type, e.target);
+      }
+    });
+  }
+
+  function clearGraph() {
+    state.nodes.clear();
+    state.links.clear();
+    state.selectedId = null;
+    redraw();
+    $('view-status').textContent = '';
+    showEmptyHintIfNeeded();
+  }
+  function showEmptyHintIfNeeded() {
+    $('graph-empty').classList.toggle('hidden', state.nodes.size > 0);
+  }
+
+  function redraw() {
+    const nodesArr = Array.from(state.nodes.values()).filter(n => activeNodeTypes.has(n.node_type));
+    const visibleIds = new Set(nodesArr.map(n => n.id));
+    const linksArr = Array.from(state.links.values())
+      .filter(l => visibleIds.has(l.source.id || l.source) && visibleIds.has(l.target.id || l.target) && activeEdgeTypes.has(l.relationship_type))
+      .map(l => ({
+        source: typeof l.source === 'object' ? l.source.id : l.source,
+        target: typeof l.target === 'object' ? l.target.id : l.target,
+        relationship_type: l.relationship_type,
+      }));
+
+    const links = gLinks.selectAll('line').data(linksArr, l => (l.source.id || l.source) + '|' + l.relationship_type + '|' + (l.target.id || l.target));
+    links.exit().remove();
+    links.enter().append('line').attr('class', 'link').attr('stroke-width', 1)
+      .append('title').text(l => l.relationship_type);
+
+    const nodes = gNodes.selectAll('circle').data(nodesArr, d => d.id);
+    nodes.exit().remove();
+    const enter = nodes.enter().append('circle')
+      .attr('class', 'node')
+      .attr('r', radius)
+      .attr('fill', d => typeColorMap[d.node_type] || '#888')
+      .call(d3.drag()
+        .on('start', (e, d) => { if (!e.active) simulation.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+        .on('drag',  (e, d) => { d.fx = e.x; d.fy = e.y; })
+        .on('end',   (e, d) => { if (!e.active) simulation.alphaTarget(0); d.fx = null; d.fy = null; }))
+      .on('click', (_e, d) => expandNode(d.id))
+      .on('mouseover', (_e, d) => highlightNeighborhood(d.id, true))
+      .on('mouseout',  (_e, d) => highlightNeighborhood(d.id, false));
+    enter.append('title').text(d => d.node_type + ': ' + d.label);
+    gNodes.selectAll('circle').classed('selected', d => d.id === state.selectedId);
+
+    const labels = gLabels.selectAll('text').data(nodesArr, d => d.id);
+    labels.exit().remove();
+    labels.enter().append('text').attr('class', 'node-label').text(d => (d.label || '').slice(0, 32));
+
+    simulation.nodes(nodesArr);
+    simulation.force('link').links(linksArr);
+    simulation.alpha(0.6).restart();
+
+    $('view-status').textContent = nodesArr.length + ' / ' + linksArr.length;
+    showEmptyHintIfNeeded();
+  }
+
+  function expandNode(id) {
+    state.selectedId = id;
+    addNodeToView(id);
+    const outs = outEdges.get(id) || [];
+    const ins  = inEdges.get(id)  || [];
+    let added = 0;
+    for (const e of outs) {
+      if (state.nodes.size >= MAX_VISIBLE) break;
+      if (addNodeToView(e.target)) { addEdgeToView(e.source, e.type, e.target); added++; }
+      else addEdgeToView(e.source, e.type, e.target);
+    }
+    for (const e of ins) {
+      if (state.nodes.size >= MAX_VISIBLE) break;
+      if (addNodeToView(e.source)) { addEdgeToView(e.source, e.type, e.target); added++; }
+      else addEdgeToView(e.source, e.type, e.target);
+    }
+    fillEdgesBetweenVisible();
+    redraw();
+    showDetail(id);
+  }
+
+  function showDetail(id) {
+    const n = nodeIndex.get(id);
+    if (!n) return;
+    const props = n.properties || {};
+    const defs = graphData.config.node_definitions[n.type];
+    const displayFields = (defs && defs.display_fields && defs.display_fields.length)
+      ? defs.display_fields
+      : Object.keys(props);
+    const propsHtml = displayFields
+      .filter(f => props[f] != null && props[f] !== '')
+      .map(f => '<tr><td>' + escapeHtml(f) + '</td><td>' + escapeHtml(String(props[f])) + '</td></tr>')
+      .join('');
+    const outs = outEdges.get(id) || [];
+    const ins  = inEdges.get(id)  || [];
+    const neighbors = []
+      .concat(outs.map(e => ({ direction: 'out', edgeType: e.type, nodeId: e.target })))
+      .concat(ins.map(e => ({ direction: 'in', edgeType: e.type, nodeId: e.source })));
+    const neighborsHtml = neighbors.length
+      ? '<ul class="neighbor-list">' + neighbors.slice(0, 100).map(nb => {
+          const nn = nodeIndex.get(nb.nodeId);
+          const lbl = nn ? nodeLabel(nn) : nb.nodeId;
+          const t = nn ? nn.type : '';
+          return '<li data-node-id="' + escapeHtml(nb.nodeId) + '">' +
+            '<span class="edge-type">' + (nb.direction === 'out' ? '→' : '←') + ' ' + escapeHtml(nb.edgeType) + '</span>' +
+            '<span class="nb-dot" style="background:' + (typeColorMap[t] || '#888') + '"></span>' +
+            '<span class="nb-label">' + escapeHtml(lbl) + '</span></li>';
+        }).join('') + '</ul>'
+      : '<div class="empty">No connections</div>';
+
+    $('detail-body').innerHTML =
+      '<div class="detail-head">' +
+        '<span class="badge" style="background:' + (typeColorMap[n.type] || '#888') + '">' + escapeHtml(n.type) + '</span>' +
+        '<div class="title">' + escapeHtml(nodeLabel(n)) + '</div>' +
+        '<div class="id">' + escapeHtml(id) + '</div>' +
+      '</div>' +
+      '<div class="section"><h3>Properties</h3>' +
+        '<table class="props-table">' + (propsHtml || '<tr><td colspan="2" style="color:var(--text-dim)">None</td></tr>') + '</table>' +
+      '</div>' +
+      '<div class="section"><h3>Connections (' + neighbors.length + ')</h3>' + neighborsHtml + '</div>';
+
+    document.querySelectorAll('#detail-body .neighbor-list li').forEach(li => {
+      li.addEventListener('click', () => expandNode(li.dataset.nodeId));
+    });
+
+    // Highlight selected in graph
+    gNodes.selectAll('circle').classed('selected', d => d.id === state.selectedId);
+  }
+
+  function clearDetail() {
+    $('detail-body').innerHTML = '<div class="empty">Click a graph node or a result to see its properties and connections.</div>';
+  }
+
+  // ---- Filters ------------------------------------------------------------
+  function renderFilters() {
+    $('node-filters').innerHTML = '<div style="font-weight:600;font-size:11px;margin-bottom:4px;color:var(--text-dim)">Nodes</div>' +
+      nodeTypes.map(t => '<label>' +
+        '<input type="checkbox" data-node-type="' + t + '"' + (activeNodeTypes.has(t) ? ' checked' : '') + '>' +
+        '<span class="swatch" style="background:' + typeColorMap[t] + '"></span>' +
+        escapeHtml(t) + '</label>').join('');
+    $('edge-filters').innerHTML = '<div style="font-weight:600;font-size:11px;margin-bottom:4px;color:var(--text-dim);margin-top:8px">Edges</div>' +
+      edgeTypes.map(t => '<label>' +
+        '<input type="checkbox" data-edge-type="' + t + '"' + (activeEdgeTypes.has(t) ? ' checked' : '') + '>' +
+        escapeHtml(t) + '</label>').join('');
+    $('node-filters').addEventListener('change', onFilterChange);
+    $('edge-filters').addEventListener('change', onFilterChange);
+  }
   function onFilterChange() {
     activeNodeTypes.clear();
-    document.querySelectorAll('#node-filters input:checked').forEach(function(el) {
-      activeNodeTypes.add(el.dataset.nodeType);
-    });
+    document.querySelectorAll('#node-filters input:checked').forEach(el => activeNodeTypes.add(el.dataset.nodeType));
     activeEdgeTypes.clear();
-    document.querySelectorAll('#edge-filters input:checked').forEach(function(el) {
-      activeEdgeTypes.add(el.dataset.edgeType);
-    });
-    applyFilters();
+    document.querySelectorAll('#edge-filters input:checked').forEach(el => activeEdgeTypes.add(el.dataset.edgeType));
+    redraw();
   }
-
-  function applyFilters() {
-    if (!graph || !sigmaInstance) return;
-
-    graph.forEachNode(function(id, attrs) {
-      graph.setNodeAttribute(id, 'hidden', !activeNodeTypes.has(attrs._type));
-    });
-
-    graph.forEachEdge(function(id, attrs, source, target) {
-      var srcVisible = !graph.getNodeAttribute(source, 'hidden');
-      var tgtVisible = !graph.getNodeAttribute(target, 'hidden');
-      var typeVisible = activeEdgeTypes.has(attrs._relType);
-      graph.setEdgeAttribute(id, 'hidden', !(srcVisible && tgtVisible && typeVisible));
-    });
-
-    sigmaInstance.refresh();
-  }
-
   renderFilters();
 
   // ==========================================================================
   // Presets — JS ports of cli/cmd/presets.go, run against the in-memory graph
   // ==========================================================================
-  var PRESETS = [
+  const PRESETS = [
     {
       name: 'top-witnesses', label: 'Top witnesses + locations', hasN: true, defaultN: 20,
       desc: 'Top N persons by WITNESSED_BY count, up to 3 incidents each, plus those incidents\' locations.',
-      rels: ['WITNESSED_BY','OCCURRED_AT'],
-      requires: { rels: ['WITNESSED_BY','OCCURRED_AT'], types: ['Person','Incident'] },
-      compute: function(opts) {
-        var n = opts.n || 20;
-        var perPerson = {};
-        graph.forEachEdge(function(eid, attrs, src, tgt) {
-          if (attrs._relType !== 'WITNESSED_BY') return;
-          if (!perPerson[tgt]) perPerson[tgt] = new Set();
-          perPerson[tgt].add(src);
-        });
-        var topPersons = Object.keys(perPerson)
-          .map(function(p){ return {p:p, c:perPerson[p].size}; })
-          .sort(function(a,b){ return b.c - a.c; })
-          .slice(0, n)
-          .map(function(x){ return x.p; });
-        var ids = new Set(topPersons);
-        var kept = [];
-        topPersons.forEach(function(p) {
-          var incs = Array.from(perPerson[p]).sort().slice(0, 3);
-          incs.forEach(function(i){ ids.add(i); kept.push(i); });
-        });
-        kept.forEach(function(iid) {
-          if (!graph.hasNode(iid)) return;
-          graph.forEachOutEdge(iid, function(eid, attrs, src, tgt) {
-            if (attrs._relType === 'OCCURRED_AT') ids.add(tgt);
-          });
-        });
+      rels: ['WITNESSED_BY', 'OCCURRED_AT'],
+      requires: { rels: ['WITNESSED_BY', 'OCCURRED_AT'], types: ['Person', 'Incident'] },
+      compute(opts) {
+        const n = opts.n || 20;
+        const perPerson = new Map();
+        for (const e of graphData.edges) {
+          if (e.type !== 'WITNESSED_BY') continue;
+          if (!perPerson.has(e.target)) perPerson.set(e.target, new Set());
+          perPerson.get(e.target).add(e.source);
+        }
+        const top = Array.from(perPerson.entries())
+          .map(([p, s]) => ({ p, c: s.size }))
+          .sort((a, b) => b.c - a.c)
+          .slice(0, n);
+        const ids = new Set(top.map(x => x.p));
+        const kept = [];
+        for (const x of top) {
+          for (const iid of Array.from(perPerson.get(x.p)).sort().slice(0, 3)) { ids.add(iid); kept.push(iid); }
+        }
+        for (const iid of kept) {
+          for (const e of (outEdges.get(iid) || [])) if (e.type === 'OCCURRED_AT') ids.add(e.target);
+        }
         return ids;
       }
     },
@@ -918,23 +1075,22 @@ self.addEventListener('message', async (e) => {
       desc: 'John Edgar Hoover + 1-hop Person/Agency/Incident neighbors (cap 150).',
       rels: null,
       requires: { seeds: ['person:john-edgar-hoover'] },
-      compute: function() {
-        var seed = 'person:john-edgar-hoover';
-        var ids = new Set();
-        if (!graph.hasNode(seed)) return ids;
+      compute() {
+        const seed = 'person:john-edgar-hoover';
+        const ids = new Set();
+        if (!nodeIndex.has(seed)) return ids;
         ids.add(seed);
-        var allowed = { Person: 1, Agency: 1, Incident: 1 };
-        graph.forEachOutEdge(seed, function(eid, attrs, src, tgt) {
-          var t = nodeIndex[tgt]; if (t && allowed[t.type]) ids.add(tgt);
-        });
-        graph.forEachInEdge(seed, function(eid, attrs, src, tgt) {
-          var s = nodeIndex[src]; if (s && allowed[s.type]) ids.add(src);
-        });
+        const allowed = new Set(['Person', 'Agency', 'Incident']);
+        for (const e of (outEdges.get(seed) || [])) {
+          const t = nodeIndex.get(e.target); if (t && allowed.has(t.type)) ids.add(e.target);
+        }
+        for (const e of (inEdges.get(seed) || [])) {
+          const s = nodeIndex.get(e.source); if (s && allowed.has(s.type)) ids.add(e.source);
+        }
         if (ids.size > 150) {
-          var keep = new Set([seed]);
-          var it = ids.values();
-          while (keep.size < 150) { var v = it.next(); if (v.done) break; keep.add(v.value); }
-          ids = keep;
+          const keep = new Set([seed]);
+          for (const v of ids) { if (keep.size >= 150) break; keep.add(v); }
+          return keep;
         }
         return ids;
       }
@@ -942,55 +1098,49 @@ self.addEventListener('message', async (e) => {
     {
       name: 'topic-cluster', label: 'Topic cluster', hasQ: true, defaultQ: 'Maury Island',
       desc: 'Incidents whose summary, location_text, or date_text mention the topic, plus 1-hop neighbors.',
-      rels: ['WITNESSED_BY','OCCURRED_AT','REPORTED_BY','MENTIONS'],
-      requires: { types: ['Incident'], propertyOnType: { type: 'Incident', anyOf: ['summary','location_text','date_text'] } },
-      compute: function(opts) {
-        var q = String(opts.q || '').toLowerCase();
+      rels: ['WITNESSED_BY', 'OCCURRED_AT', 'REPORTED_BY', 'MENTIONS'],
+      requires: { types: ['Incident'], propertyOnType: { type: 'Incident', anyOf: ['summary', 'location_text', 'date_text'] } },
+      compute(opts) {
+        const q = String(opts.q || '').toLowerCase();
         if (!q) return new Set();
-        var ids = new Set();
-        var hits = [];
-        for (var i = 0; i < graphData.nodes.length && hits.length < 80; i++) {
-          var n = graphData.nodes[i];
+        const ids = new Set();
+        const hits = [];
+        for (const n of graphData.nodes) {
+          if (hits.length >= 80) break;
           if (n.type !== 'Incident') continue;
-          var p = n.properties || {};
-          var match = false;
-          var fields = ['summary','location_text','date_text'];
-          for (var f = 0; f < fields.length && !match; f++) {
-            var v = p[fields[f]];
-            if (v && String(v).toLowerCase().indexOf(q) !== -1) match = true;
+          const p = n.properties || {};
+          let match = false;
+          for (const f of ['summary', 'location_text', 'date_text']) {
+            const v = p[f];
+            if (v && String(v).toLowerCase().indexOf(q) !== -1) { match = true; break; }
           }
           if (match) { ids.add(n.id); hits.push(n.id); }
         }
-        hits.forEach(function(iid) {
-          if (!graph.hasNode(iid)) return;
-          graph.forEachOutEdge(iid, function(eid, attrs, src, tgt) { ids.add(tgt); });
-          graph.forEachInEdge(iid, function(eid, attrs, src, tgt) { ids.add(src); });
-        });
+        for (const iid of hits) {
+          for (const e of (outEdges.get(iid) || [])) ids.add(e.target);
+          for (const e of (inEdges.get(iid) || [])) ids.add(e.source);
+        }
         return ids;
       }
     },
     {
       name: 'co-witnesses', label: 'Co-witness clusters', hasN: true, defaultN: 20,
-      desc: 'Top N incidents by witness count (≥2 witnesses) plus the witnesses themselves.',
+      desc: 'Top N incidents by witness count (>= 2 witnesses) plus the witnesses themselves.',
       rels: ['WITNESSED_BY'],
       requires: { rels: ['WITNESSED_BY'] },
-      compute: function(opts) {
-        var n = opts.n || 20;
-        var counts = {};
-        graph.forEachEdge(function(eid, attrs, src, tgt) {
-          if (attrs._relType !== 'WITNESSED_BY') return;
-          counts[src] = (counts[src] || 0) + 1;
-        });
-        var top = Object.keys(counts)
-          .filter(function(k){ return counts[k] >= 2; })
-          .sort(function(a,b){ return counts[b] - counts[a]; })
-          .slice(0, n);
-        var ids = new Set(top);
-        top.forEach(function(iid) {
-          graph.forEachOutEdge(iid, function(eid, attrs, src, tgt) {
-            if (attrs._relType === 'WITNESSED_BY') ids.add(tgt);
-          });
-        });
+      compute(opts) {
+        const n = opts.n || 20;
+        const counts = new Map();
+        for (const e of graphData.edges) {
+          if (e.type !== 'WITNESSED_BY') continue;
+          counts.set(e.source, (counts.get(e.source) || 0) + 1);
+        }
+        const top = Array.from(counts.entries())
+          .filter(([, c]) => c >= 2).sort((a, b) => b[1] - a[1]).slice(0, n).map(x => x[0]);
+        const ids = new Set(top);
+        for (const iid of top) {
+          for (const e of (outEdges.get(iid) || [])) if (e.type === 'WITNESSED_BY') ids.add(e.target);
+        }
         return ids;
       }
     },
@@ -998,100 +1148,68 @@ self.addEventListener('message', async (e) => {
       name: 'top-objects', label: 'Top objects + source docs', hasN: true, defaultN: 20,
       desc: 'Top N objects by mentions plus the documents that name them (cap 60 docs).',
       rels: ['MENTIONS'],
-      requires: { rels: ['MENTIONS'], types: ['Object','Document'] },
-      compute: function(opts) {
-        var n = opts.n || 20;
-        var top = graphData.nodes
-          .filter(function(x){ return x.type === 'Object'; })
-          .map(function(x){
-            var m = x.properties && x.properties.mentions;
-            return { id: x.id, m: (typeof m === 'number') ? m : parseInt(m, 10) || 0 };
-          })
-          .sort(function(a,b){ return b.m - a.m; })
-          .slice(0, n)
-          .map(function(x){ return x.id; });
-        var ids = new Set(top);
-        var docCount = 0;
-        for (var i = 0; i < top.length && docCount < 60; i++) {
-          var oid = top[i];
-          if (!graph.hasNode(oid)) continue;
-          graph.forEachInEdge(oid, function(eid, attrs, src, tgt) {
-            if (docCount >= 60) return;
-            if (attrs._relType !== 'MENTIONS') return;
-            if (!ids.has(src)) { ids.add(src); docCount++; }
-          });
+      requires: { rels: ['MENTIONS'], types: ['Object', 'Document'] },
+      compute(opts) {
+        const n = opts.n || 20;
+        const objs = graphData.nodes
+          .filter(x => x.type === 'Object')
+          .map(x => ({ id: x.id, m: (typeof x.properties?.mentions === 'number') ? x.properties.mentions : (parseInt(x.properties?.mentions, 10) || 0) }))
+          .sort((a, b) => b.m - a.m).slice(0, n).map(x => x.id);
+        const ids = new Set(objs);
+        let docCount = 0;
+        for (const oid of objs) {
+          if (docCount >= 60) break;
+          for (const e of (inEdges.get(oid) || [])) {
+            if (docCount >= 60) break;
+            if (e.type !== 'MENTIONS') continue;
+            if (!ids.has(e.source)) { ids.add(e.source); docCount++; }
+          }
         }
         return ids;
       }
     },
     {
-      name: 'documents-mentions', label: 'Documents → entities', hasN: true, defaultN: 20,
+      name: 'documents-mentions', label: 'Documents -> entities', hasN: true, defaultN: 20,
       desc: 'Top N documents by MENTIONS out-degree + the entities they mention (cap 200 entities).',
       rels: ['MENTIONS'],
       requires: { rels: ['MENTIONS'], types: ['Document'] },
-      compute: function(opts) {
-        var n = opts.n || 20;
-        var counts = {};
-        graph.forEachEdge(function(eid, attrs, src, tgt) {
-          if (attrs._relType !== 'MENTIONS') return;
-          var s = nodeIndex[src]; if (!s || s.type !== 'Document') return;
-          counts[src] = (counts[src] || 0) + 1;
-        });
-        var top = Object.keys(counts)
-          .sort(function(a,b){ return counts[b] - counts[a]; })
-          .slice(0, n);
-        var ids = new Set(top);
-        var capLeft = 200;
-        for (var i = 0; i < top.length && capLeft > 0; i++) {
-          var did = top[i];
-          if (!graph.hasNode(did)) continue;
-          graph.forEachOutEdge(did, function(eid, attrs, src, tgt) {
-            if (capLeft <= 0) return;
-            if (attrs._relType !== 'MENTIONS') return;
-            if (!ids.has(tgt)) { ids.add(tgt); capLeft--; }
-          });
+      compute(opts) {
+        const n = opts.n || 20;
+        const counts = new Map();
+        for (const e of graphData.edges) {
+          if (e.type !== 'MENTIONS') continue;
+          const s = nodeIndex.get(e.source);
+          if (!s || s.type !== 'Document') continue;
+          counts.set(e.source, (counts.get(e.source) || 0) + 1);
+        }
+        const top = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]).slice(0, n).map(x => x[0]);
+        const ids = new Set(top);
+        let capLeft = 200;
+        for (const did of top) {
+          if (capLeft <= 0) break;
+          for (const e of (outEdges.get(did) || [])) {
+            if (capLeft <= 0) break;
+            if (e.type !== 'MENTIONS') continue;
+            if (!ids.has(e.target)) { ids.add(e.target); capLeft--; }
+          }
         }
         return ids;
       }
-    }
+    },
   ];
 
-  var activePreset = null;
-
+  let activePreset = null;
   function presetApplies(p) {
-    var req = p.requires;
-    if (!req) return true;
-    if (req.types) {
-      for (var i = 0; i < req.types.length; i++) {
-        if (nodeTypes.indexOf(req.types[i]) === -1) return false;
-      }
-    }
-    if (req.rels) {
-      for (var j = 0; j < req.rels.length; j++) {
-        if (edgeTypes.indexOf(req.rels[j]) === -1) return false;
-      }
-    }
-    if (req.seeds) {
-      // nodeIndex isn't built yet when renderPresets() runs; scan graphData directly.
-      for (var k = 0; k < req.seeds.length; k++) {
-        var seed = req.seeds[k];
-        var hit = false;
-        for (var sn = 0; sn < graphData.nodes.length; sn++) {
-          if (graphData.nodes[sn].id === seed) { hit = true; break; }
-        }
-        if (!hit) return false;
-      }
-    }
+    const req = p.requires; if (!req) return true;
+    if (req.types) for (const t of req.types) if (nodeTypes.indexOf(t) === -1) return false;
+    if (req.rels)  for (const r of req.rels)  if (edgeTypes.indexOf(r) === -1) return false;
+    if (req.seeds) for (const s of req.seeds) if (!nodeIndex.has(s)) return false;
     if (req.propertyOnType) {
-      var pot = req.propertyOnType;
-      var found = false;
-      for (var m = 0; m < graphData.nodes.length && !found; m++) {
-        var nn = graphData.nodes[m];
+      const pot = req.propertyOnType; let found = false;
+      for (const nn of graphData.nodes) {
         if (nn.type !== pot.type) continue;
-        var props = nn.properties || {};
-        for (var f = 0; f < pot.anyOf.length; f++) {
-          if (props[pot.anyOf[f]] != null) { found = true; break; }
-        }
+        const props = nn.properties || {};
+        if (pot.anyOf.some(f => props[f] != null)) { found = true; break; }
       }
       if (!found) return false;
     }
@@ -1099,385 +1217,208 @@ self.addEventListener('message', async (e) => {
   }
 
   function renderPresets() {
-    var list = document.getElementById('preset-list');
-    var applicable = PRESETS.filter(presetApplies);
+    const list = $('preset-list');
+    const applicable = PRESETS.filter(presetApplies);
     if (applicable.length === 0) {
       list.innerHTML = '<div style="color:var(--text-dim);font-size:11px">No presets match this domain’s schema.</div>';
       return;
     }
-    list.innerHTML = applicable.map(function(p) {
-      var input = '';
+    list.innerHTML = applicable.map(p => {
+      let input = '';
       if (p.hasQ) input = '<input type="text" class="preset-q" placeholder="topic..." value="' + escapeHtml(p.defaultQ || '') + '" data-preset="' + p.name + '">';
       else if (p.hasN) input = '<input type="number" class="preset-n" min="1" max="100" value="' + p.defaultN + '" data-preset="' + p.name + '">';
       return '<div class="preset-row">' +
         '<button class="preset-btn" data-preset="' + p.name + '" title="' + escapeHtml(p.desc) + '">' + escapeHtml(p.label) + '</button>' +
         input + '</div>';
     }).join('');
-    list.querySelectorAll('.preset-btn').forEach(function(btn) {
-      btn.addEventListener('click', function() { runPresetByName(btn.dataset.preset); });
+    list.querySelectorAll('.preset-btn').forEach(btn => {
+      btn.addEventListener('click', () => runPresetByName(btn.dataset.preset));
     });
-    list.querySelectorAll('.preset-q, .preset-n').forEach(function(inp) {
-      inp.addEventListener('keydown', function(ev) {
-        if (ev.key === 'Enter') runPresetByName(inp.dataset.preset);
-      });
+    list.querySelectorAll('.preset-q, .preset-n').forEach(inp => {
+      inp.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') runPresetByName(inp.dataset.preset); });
     });
   }
 
   function runPresetByName(name) {
-    var p = null;
-    for (var i = 0; i < PRESETS.length; i++) { if (PRESETS[i].name === name) { p = PRESETS[i]; break; } }
+    const p = PRESETS.find(x => x.name === name);
     if (!p) return;
-    var opts = {};
+    const opts = {};
     if (p.hasN) {
-      var ni = document.querySelector('.preset-n[data-preset="' + name + '"]');
-      var v = ni ? parseInt(ni.value, 10) : p.defaultN;
-      opts.n = Math.max(1, Math.min(100, isFinite(v) ? v : p.defaultN));
+      const ni = document.querySelector('.preset-n[data-preset="' + name + '"]');
+      const v = ni ? parseInt(ni.value, 10) : p.defaultN;
+      opts.n = Math.max(1, Math.min(100, Number.isFinite(v) ? v : p.defaultN));
     }
     if (p.hasQ) {
-      var qi = document.querySelector('.preset-q[data-preset="' + name + '"]');
+      const qi = document.querySelector('.preset-q[data-preset="' + name + '"]');
       opts.q = qi ? qi.value : (p.defaultQ || '');
     }
-    var ids = p.compute(opts);
+    const ids = p.compute(opts);
     applyPreset(p, ids, opts);
   }
 
   function applyPreset(p, ids, opts) {
-    // Clear any active search highlights + the search box so the two modes don't stack.
-    clearHighlights();
-    document.getElementById('search-input').value = '';
-    clearSearchResults();
+    clearGraph();
+    activePreset = { preset: p, opts };
+    $('search-input').value = '';
+    $('search-status').textContent = '';
+    let added = 0;
+    for (const id of ids) {
+      if (added >= MAX_VISIBLE) break;
+      if (addNodeToView(id)) added++;
+    }
+    fillEdgesBetweenVisible();
+    redraw();
+    svg.transition().duration(400).call(zoom.transform, d3.zoomIdentity);
 
-    activePreset = { preset: p, ids: ids };
-
-    graph.forEachNode(function(id) {
-      graph.setNodeAttribute(id, 'hidden', !ids.has(id));
-    });
-    graph.forEachEdge(function(eid, attrs, src, tgt) {
-      var ok = ids.has(src) && ids.has(tgt);
-      if (ok && p.rels) ok = p.rels.indexOf(attrs._relType) !== -1;
-      graph.setEdgeAttribute(eid, 'hidden', !ok);
-    });
-
-    // Quick force layout on the visible subset (small N, cheap) so the
-    // preset is legible instead of inheriting the global type-cluster scatter.
-    layoutSubgraph(ids, p.rels);
-    sigmaInstance.refresh();
-
-    var lbl = p.label;
+    let lbl = p.label;
     if (opts.q) lbl += ' — "' + opts.q + '"';
     if (opts.n) lbl += ' (n=' + opts.n + ')';
-    lbl += ' · ' + ids.size + ' nodes';
-    document.getElementById('preset-active-label').textContent = lbl;
-    document.getElementById('preset-active').classList.add('open');
+    lbl += ' · ' + state.nodes.size + ' nodes';
+    $('preset-active-label').textContent = lbl;
+    $('preset-active').classList.add('open');
 
-    // Show a result list of the preset members so they're clickable.
-    var resultsEl = document.getElementById('results');
-    if (ids.size === 0) {
-      resultsEl.innerHTML = '<div class="empty-state">Preset returned no matches.</div>';
-      return;
-    }
-    var members = [];
-    ids.forEach(function(id) { members.push(id); });
-    members.sort(function(a, b) {
-      var ta = (nodeIndex[a] && nodeIndex[a].type) || '';
-      var tb = (nodeIndex[b] && nodeIndex[b].type) || '';
-      if (ta !== tb) return ta < tb ? -1 : 1;
-      return a < b ? -1 : 1;
-    });
-    resultsEl.innerHTML = members.slice(0, 200).map(function(id) {
-      var node = nodeIndex[id]; if (!node) return '';
-      var title = node.properties.name || node.properties.legal_name || id;
-      return '<div class="result-card" data-node-id="' + id + '">' +
-        '<div class="result-type" style="color:' + (typeColorMap[node.type] || '#888') + '">' + node.type + '</div>' +
-        '<div class="result-title">' + escapeHtml(title) + '</div></div>';
-    }).join('');
-    resultsEl.querySelectorAll('.result-card').forEach(function(card) {
-      card.addEventListener('click', function() { selectNode(card.dataset.nodeId); });
-    });
-  }
-
-  function layoutSubgraph(idSet, allowedRels) {
-    if (!idSet || idSet.size === 0 || idSet.size > 400) return;
-    var sub = new graphology.DirectedGraph();
-    idSet.forEach(function(id) {
-      if (!graph.hasNode(id)) return;
-      var center = typeCenters[graph.getNodeAttribute(id, '_type')] || { x: 0, y: 0 };
-      sub.addNode(id, {
-        x: center.x + (Math.random() - 0.5) * 60,
-        y: center.y + (Math.random() - 0.5) * 60,
-      });
-    });
-    graph.forEachEdge(function(eid, attrs, src, tgt) {
-      if (!idSet.has(src) || !idSet.has(tgt)) return;
-      if (allowedRels && allowedRels.indexOf(attrs._relType) === -1) return;
-      if (!sub.hasNode(src) || !sub.hasNode(tgt)) return;
-      if (sub.hasEdge(src, tgt)) return;
-      try { sub.addEdge(src, tgt); } catch (e) {}
-    });
-    forceLayout(sub, 100);
-    sub.forEachNode(function(id, attrs) {
-      if (graph.hasNode(id)) {
-        graph.setNodeAttribute(id, 'x', attrs.x);
-        graph.setNodeAttribute(id, 'y', attrs.y);
-      }
+    // Result list for clickable members.
+    const members = Array.from(state.nodes.values());
+    members.sort((a, b) => a.node_type === b.node_type ? a.id.localeCompare(b.id) : a.node_type.localeCompare(b.node_type));
+    $('results').innerHTML = members.map(m =>
+      '<div class="result-card" data-node-id="' + escapeHtml(m.id) + '">' +
+        '<div style="display:flex;align-items:center">' +
+          '<span class="result-type" style="background:' + (typeColorMap[m.node_type] || '#888') + '">' + escapeHtml(m.node_type) + '</span>' +
+          '<span style="font-size:13px;font-weight:500">' + escapeHtml(m.label) + '</span>' +
+        '</div>' +
+        '<div class="result-meta">' + escapeHtml(m.id) + '</div>' +
+      '</div>'
+    ).join('');
+    $('results').querySelectorAll('.result-card').forEach(card => {
+      card.addEventListener('click', () => { selectAndExpand(card.dataset.nodeId); });
     });
   }
 
   function clearPreset() {
     activePreset = null;
-    document.getElementById('preset-active').classList.remove('open');
-    applyFilters(); // restore visibility from filter checkboxes
-    clearSearchResults();
+    $('preset-active').classList.remove('open');
+    clearGraph();
+    clearDetail();
+    $('results').innerHTML = '<div style="color:var(--text-dim);padding:24px 12px;text-align:center;font-size:12px">Search or pick a preset to populate the graph.</div>';
   }
-
-  document.getElementById('preset-clear').addEventListener('click', clearPreset);
+  $('preset-clear').addEventListener('click', clearPreset);
   renderPresets();
 
-  // --- Build Graphology graph ---
-  setProgress(0.04, 'Building graph...');
-  graph = new graphology.DirectedGraph();
-
-  var nodeIndex = {};
-  graphData.nodes.forEach(function(n, i) { nodeIndex[n.id] = { id: n.id, type: n.type, properties: n.properties, semantic_text: n.semantic_text, _index: i }; });
-
-  for (var ni = 0; ni < graphData.nodes.length; ni++) {
-    var n = graphData.nodes[ni];
-    var center = typeCenters[n.type] || { x: 0, y: 0 };
-    graph.addNode(n.id, {
-      label: n.properties.name || n.properties.legal_name || n.properties.type_name || n.id,
-      x: center.x + (Math.random() - 0.5) * 120,
-      y: center.y + (Math.random() - 0.5) * 120,
-      size: 4,
-      color: typeColorMap[n.type] || '#888',
-      _type: n.type,
-    });
-  }
-
-  for (var ei = 0; ei < graphData.edges.length; ei++) {
-    var e = graphData.edges[ei];
-    if (graph.hasNode(e.source) && graph.hasNode(e.target)) {
-      try {
-        graph.addEdgeWithKey(e.id, e.source, e.target, {
-          label: e.type,
-          _relType: e.type,
-          size: 1,
-          color: '#444',
-        });
-      } catch (ex) {} // skip duplicate edges
+  function selectAndExpand(id) {
+    // Don't blow away the graph — just bring this node + its neighborhood in.
+    expandNode(id);
+    // center camera on the node
+    const node = state.nodes.get(id);
+    if (node && Number.isFinite(node.x) && Number.isFinite(node.y)) {
+      const rect = $('graph-container').getBoundingClientRect();
+      svg.transition().duration(400).call(zoom.transform, d3.zoomIdentity.translate(rect.width / 2 - node.x, rect.height / 2 - node.y));
     }
   }
 
-  // Scale node size by degree
-  graph.forEachNode(function(id) {
-    graph.setNodeAttribute(id, 'size', 3 + Math.sqrt(graph.degree(id)) * 2);
-  });
+  // ---- Search input -------------------------------------------------------
+  let searchTimeout = null;
+  const searchInput = $('search-input');
+  const searchMode = $('search-mode');
 
-  // --- Render sigma.js ---
-  // Initial positions come from the cheap type-cluster scatter above (O(N)).
-  // The full O(N²) force layout would freeze the tab for many minutes at 18k
-  // nodes; we instead run a small force layout on the visible subset whenever
-  // a preset is applied (see applyPreset).
-  setProgress(0.06, 'Rendering graph...');
-  var container = document.getElementById('sigma-container');
-  sigmaInstance = new Sigma(graph, container, {
-    renderLabels: true,
-    labelRenderedSizeThreshold: 8,
-    labelSize: 12,
-    labelColor: { color: '#ccc' },
-    defaultEdgeColor: '#2a2d3a',
-    defaultEdgeType: 'arrow',
-    edgeLabelSize: 10,
-  });
-
-  // --- Sigma click handlers ---
-  sigmaInstance.on('clickNode', function(event) {
-    selectNode(event.node);
-  });
-
-  sigmaInstance.on('clickStage', function() {
-    clearSelection();
-  });
-
-  // --- Search input ---
-  var searchTimeout = null;
-  var searchInput = document.getElementById('search-input');
-  var searchMode = document.getElementById('search-mode');
-
-  searchInput.addEventListener('input', function() {
+  searchInput.addEventListener('input', () => {
     clearTimeout(searchTimeout);
-    var q = searchInput.value.trim();
+    const q = searchInput.value.trim();
     if (activePreset) {
       activePreset = null;
-      document.getElementById('preset-active').classList.remove('open');
-      applyFilters();
+      $('preset-active').classList.remove('open');
     }
     if (q.length < 2) {
-      clearSearchResults();
+      if (q.length === 0) {
+        $('results').innerHTML = '<div style="color:var(--text-dim);padding:24px 12px;text-align:center;font-size:12px">Search or pick a preset to populate the graph.</div>';
+        $('search-status').textContent = '';
+      }
       return;
     }
-    document.getElementById('search-status').textContent = 'Searching...';
-    searchTimeout = setTimeout(function() {
-      worker.postMessage({
-        type: 'search',
-        query: q,
-        mode: searchMode.value,
-        limit: 20,
-      });
+    $('search-status').textContent = 'Searching...';
+    searchTimeout = setTimeout(() => {
+      worker.postMessage({ type: 'search', query: q, mode: searchMode.value, limit: 20 });
     }, 600);
   });
 
-  // --- Search results rendering ---
   function onSearchResults(results) {
-    document.getElementById('search-status').textContent =
-      results.length > 0 ? results.length + ' results' : 'No results';
-
-    var resultsEl = document.getElementById('results');
-    if (results.length === 0) {
-      resultsEl.innerHTML = '<div class="empty-state">No results found.</div>';
-      clearHighlights();
+    $('search-status').textContent = results.length ? results.length + ' results' : 'No results';
+    if (!results.length) {
+      $('results').innerHTML = '<div style="color:var(--text-dim);padding:24px 12px;text-align:center;font-size:12px">No results.</div>';
       return;
     }
 
-    resultsEl.innerHTML = results.map(function(r) {
-      var node = nodeIndex[r.node_id];
-      if (!node) return '';
-      var title = node.properties.name || node.properties.legal_name || node.id;
-      return '<div class="result-card" data-node-id="' + r.node_id + '">' +
-        '<div class="result-type" style="color:' + (typeColorMap[node.type] || '#888') + '">' + node.type + '</div>' +
-        '<div class="result-title">' + escapeHtml(title) + '</div>' +
-        '<div class="result-score">' +
-          '<div class="score-bar"><div class="fill" style="width:' + (r.normalized_score * 100).toFixed(0) + '%"></div></div>' +
-          '<span class="score-val">' + (r.normalized_score * 100).toFixed(0) + '%</span>' +
-        '</div></div>';
+    $('results').innerHTML = results.map(r => {
+      const n = nodeIndex.get(r.node_id); if (!n) return '';
+      const title = nodeLabel(n);
+      return '<div class="result-card" data-node-id="' + escapeHtml(r.node_id) + '">' +
+        '<span class="result-score">' + r.score.toFixed(3) + '</span>' +
+        '<div><span class="result-type" style="background:' + (typeColorMap[n.type] || '#888') + '">' + escapeHtml(n.type) + '</span>' +
+        '<span style="font-size:13px;font-weight:500">' + escapeHtml(title) + '</span></div>' +
+        '<div class="result-meta">' + escapeHtml(r.node_id) + '</div>' +
+        '</div>';
     }).join('');
-
-    resultsEl.querySelectorAll('.result-card').forEach(function(card) {
-      card.addEventListener('click', function() {
-        selectNode(card.dataset.nodeId);
-      });
+    $('results').querySelectorAll('.result-card').forEach(card => {
+      card.addEventListener('click', () => seedFromResults(results, card.dataset.nodeId));
     });
 
-    highlightResults(results);
+    // Auto-seed the graph with the result set + their immediate neighbors.
+    seedFromResults(results, results[0].node_id);
   }
 
-  function clearSearchResults() {
-    document.getElementById('results').innerHTML =
-      '<div class="empty-state">Enter a search query or click a node on the graph.</div>';
-    document.getElementById('search-status').textContent = '';
-    clearHighlights();
-  }
-
-  // --- Graph highlighting ---
-  var savedColors = {};
-  var savedSizes = {};
-
-  function highlightResults(results) {
-    clearHighlights();
-    var resultIds = new Set(results.map(function(r) { return r.node_id; }));
-
-    graph.forEachNode(function(id, attrs) {
-      savedColors[id] = attrs.color;
-      savedSizes[id] = attrs.size;
-      if (!resultIds.has(id)) {
-        graph.setNodeAttribute(id, 'color', '#222');
-        graph.setNodeAttribute(id, 'size', 2);
-      } else {
-        graph.setNodeAttribute(id, 'size', attrs.size + 3);
+  // Seed the graph with the top results + a small expansion around each.
+  function seedFromResults(results, focusId) {
+    clearGraph();
+    const focusNeighbors = 4;
+    for (const r of results) addNodeToView(r.node_id);
+    for (const r of results) {
+      if (state.nodes.size >= MAX_VISIBLE) break;
+      const id = r.node_id;
+      const outs = (outEdges.get(id) || []).slice();
+      const ins  = (inEdges.get(id)  || []).slice();
+      const combined = outs.map(e => ({ nb: e.target, e })).concat(ins.map(e => ({ nb: e.source, e })))
+        .sort((a, b) => (degree.get(b.nb) || 0) - (degree.get(a.nb) || 0))
+        .slice(0, focusNeighbors);
+      for (const x of combined) {
+        if (state.nodes.size >= MAX_VISIBLE) break;
+        addNodeToView(x.nb);
+        addEdgeToView(x.e.source, x.e.type, x.e.target);
       }
-    });
-
-    sigmaInstance.refresh();
-  }
-
-  function clearHighlights() {
-    Object.keys(savedColors).forEach(function(id) {
-      if (graph.hasNode(id)) {
-        graph.setNodeAttribute(id, 'color', savedColors[id]);
-        graph.setNodeAttribute(id, 'size', savedSizes[id] || 4);
-      }
-    });
-    savedColors = {};
-    savedSizes = {};
-    if (sigmaInstance) sigmaInstance.refresh();
-  }
-
-  // --- Node selection + detail panel ---
-  function selectNode(nodeId) {
-    selectedNode = nodeId;
-    var node = nodeIndex[nodeId];
-    if (!node) return;
-
-    document.querySelectorAll('.result-card').forEach(function(c) { c.classList.remove('active'); });
-    var activeCard = document.querySelector('.result-card[data-node-id="' + nodeId + '"]');
-    if (activeCard) activeCard.classList.add('active');
-
-    // Center camera
-    var nodePos = sigmaInstance.getNodeDisplayData(nodeId);
-    if (nodePos) {
-      sigmaInstance.getCamera().animate({ x: nodePos.x, y: nodePos.y, ratio: 0.5 }, { duration: 300 });
     }
+    fillEdgesBetweenVisible();
+    if (focusId) state.selectedId = focusId;
+    redraw();
+    if (focusId) showDetail(focusId);
+  }
 
-    // Build detail panel
-    var defs = graphData.config.node_definitions[node.type];
-    var displayFields = defs ? defs.display_fields : Object.keys(node.properties);
+  // ---- Header buttons -----------------------------------------------------
+  $('clear-graph').addEventListener('click', () => { clearGraph(); clearDetail(); });
+  $('recenter').addEventListener('click', () => {
+    svg.transition().duration(400).call(zoom.transform, d3.zoomIdentity);
+  });
+  $('show-hubs').addEventListener('click', showHubs);
 
-    var propsHtml = displayFields
-      .filter(function(f) { return node.properties[f] != null; })
-      .map(function(f) { return '<tr><td>' + escapeHtml(f) + '</td><td>' + escapeHtml(String(node.properties[f])) + '</td></tr>'; })
-      .join('');
+  function showHubs() {
+    clearGraph();
+    const hubs = Array.from(nodeIndex.keys())
+      .sort((a, b) => (degree.get(b) || 0) - (degree.get(a) || 0))
+      .slice(0, INITIAL_HUBS);
+    for (const id of hubs) addNodeToView(id);
+    fillEdgesBetweenVisible();
+    redraw();
+    svg.transition().duration(400).call(zoom.transform, d3.zoomIdentity);
+  }
 
-    // Neighbors
-    var neighbors = [];
-    if (graph.hasNode(nodeId)) {
-      graph.forEachOutEdge(nodeId, function(edge, attrs, src, tgt) {
-        var tgtNode = nodeIndex[tgt];
-        neighbors.push({ direction: 'out', edgeType: attrs._relType, nodeId: tgt,
-          label: tgtNode ? (tgtNode.properties.name || tgtNode.properties.legal_name || tgt) : tgt,
-          nodeType: tgtNode ? tgtNode.type : '' });
-      });
-      graph.forEachInEdge(nodeId, function(edge, attrs, src, tgt) {
-        var srcNode = nodeIndex[src];
-        neighbors.push({ direction: 'in', edgeType: attrs._relType, nodeId: src,
-          label: srcNode ? (srcNode.properties.name || srcNode.properties.legal_name || src) : src,
-          nodeType: srcNode ? srcNode.type : '' });
-      });
+  // Initial view: empty canvas with hint until the user acts.
+  showEmptyHintIfNeeded();
+
+  // Resize handling
+  window.addEventListener('resize', () => {
+    const r = $('graph-container').getBoundingClientRect();
+    if (simulation) {
+      simulation.force('center', d3.forceCenter(r.width / 2, r.height / 2));
+      simulation.alpha(0.3).restart();
     }
-
-    var neighborsHtml = neighbors.length > 0
-      ? '<ul class="neighbor-list">' + neighbors.map(function(nb) {
-          return '<li data-node-id="' + nb.nodeId + '">' +
-            '<span class="edge-type">' + (nb.direction === 'out' ? '&rarr;' : '&larr;') + ' ' + nb.edgeType + '</span>' +
-            '<span style="color:' + (typeColorMap[nb.nodeType] || '#888') + '">' + escapeHtml(nb.label) + '</span></li>';
-        }).join('') + '</ul>'
-      : '<div style="color:var(--text-dim)">No connections</div>';
-
-    document.getElementById('detail-title').textContent =
-      (node.properties.name || node.properties.legal_name || nodeId) + ' (' + node.type + ')';
-    document.getElementById('detail-content').innerHTML =
-      '<div class="detail-section"><h3>Properties</h3>' +
-      '<table class="props-table">' + (propsHtml || '<tr><td colspan="2" style="color:var(--text-dim)">None</td></tr>') + '</table></div>' +
-      '<div class="detail-section"><h3>Connections (' + neighbors.length + ')</h3>' + neighborsHtml + '</div>';
-
-    document.getElementById('detail').classList.add('open');
-
-    document.querySelectorAll('#detail .neighbor-list li').forEach(function(li) {
-      li.addEventListener('click', function() { selectNode(li.dataset.nodeId); });
-    });
-  }
-
-  function clearSelection() {
-    selectedNode = null;
-    document.getElementById('detail').classList.remove('open');
-    document.querySelectorAll('.result-card').forEach(function(c) { c.classList.remove('active'); });
-  }
-
-  document.getElementById('detail-close').addEventListener('click', clearSelection);
-
-  function escapeHtml(str) {
-    var el = document.createElement('span');
-    el.textContent = str;
-    return el.innerHTML;
-  }
+  });
 })();
 </script>
 </body>
