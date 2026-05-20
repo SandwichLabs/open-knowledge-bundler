@@ -1,5 +1,10 @@
 # graph-search-tool
 
+> THIS IS AN EXPERIMENTAL TOOL BUILT WITH THE HELP OF AI TO PROVE OUT A FEW KEY TECHNOLOGIES(CLIENT-SIDE GRAPH SEARCH, ETC).
+> NO WARRANTY, DO NOT RELY ON THIS NOT TO EAT BABIES, TURN INTO SKYNET.
+
+
+
 A declarative toolkit for building local-first knowledge graphs with hybrid search. Define your domain in YAML, ingest data, and get vector + lexical + graph search out of the box — as a CLI or as a self-contained browser app.
 
 ```
