@@ -785,11 +785,22 @@ self.addEventListener('message', async (e) => {
     document.getElementById('load-text').textContent = 'Worker failed to load. Check console.';
   });
 
+  // Fetch manifest first (tiny) to discover the bundle version. We append it
+  // as ?v=... to graph.json / embeddings.bin so that regenerating the bundle
+  // never serves stale data from the browser Cache API.
   var baseUrl = new URL('./', window.location.href).href;
+  setProgress(0.005, 'Reading manifest...');
+  var manifest = {};
+  try {
+    var manifestResp = await fetch(baseUrl + 'manifest.json', { cache: 'no-store' });
+    manifest = await manifestResp.json();
+  } catch (e) { console.warn('manifest.json fetch failed', e); }
+  var bundleVersion = manifest.generated_at || String(Date.now());
+  var cacheBust = '?v=' + encodeURIComponent(bundleVersion);
   worker.postMessage({
     type: 'init',
-    graphUrl: baseUrl + 'graph.json',
-    embeddingsUrl: baseUrl + 'embeddings.bin',
+    graphUrl: baseUrl + 'graph.json' + cacheBust,
+    embeddingsUrl: baseUrl + 'embeddings.bin' + cacheBust,
   });
 
   // Block until the worker has finished streaming + parsing graph.json. The
@@ -873,6 +884,7 @@ self.addEventListener('message', async (e) => {
       name: 'top-witnesses', label: 'Top witnesses + locations', hasN: true, defaultN: 20,
       desc: 'Top N persons by WITNESSED_BY count, up to 3 incidents each, plus those incidents\' locations.',
       rels: ['WITNESSED_BY','OCCURRED_AT'],
+      requires: { rels: ['WITNESSED_BY','OCCURRED_AT'], types: ['Person','Incident'] },
       compute: function(opts) {
         var n = opts.n || 20;
         var perPerson = {};
@@ -905,6 +917,7 @@ self.addEventListener('message', async (e) => {
       name: 'fbi-network', label: 'FBI network (Hoover)',
       desc: 'John Edgar Hoover + 1-hop Person/Agency/Incident neighbors (cap 150).',
       rels: null,
+      requires: { seeds: ['person:john-edgar-hoover'] },
       compute: function() {
         var seed = 'person:john-edgar-hoover';
         var ids = new Set();
@@ -930,6 +943,7 @@ self.addEventListener('message', async (e) => {
       name: 'topic-cluster', label: 'Topic cluster', hasQ: true, defaultQ: 'Maury Island',
       desc: 'Incidents whose summary, location_text, or date_text mention the topic, plus 1-hop neighbors.',
       rels: ['WITNESSED_BY','OCCURRED_AT','REPORTED_BY','MENTIONS'],
+      requires: { types: ['Incident'], propertyOnType: { type: 'Incident', anyOf: ['summary','location_text','date_text'] } },
       compute: function(opts) {
         var q = String(opts.q || '').toLowerCase();
         if (!q) return new Set();
@@ -959,6 +973,7 @@ self.addEventListener('message', async (e) => {
       name: 'co-witnesses', label: 'Co-witness clusters', hasN: true, defaultN: 20,
       desc: 'Top N incidents by witness count (≥2 witnesses) plus the witnesses themselves.',
       rels: ['WITNESSED_BY'],
+      requires: { rels: ['WITNESSED_BY'] },
       compute: function(opts) {
         var n = opts.n || 20;
         var counts = {};
@@ -983,6 +998,7 @@ self.addEventListener('message', async (e) => {
       name: 'top-objects', label: 'Top objects + source docs', hasN: true, defaultN: 20,
       desc: 'Top N objects by mentions plus the documents that name them (cap 60 docs).',
       rels: ['MENTIONS'],
+      requires: { rels: ['MENTIONS'], types: ['Object','Document'] },
       compute: function(opts) {
         var n = opts.n || 20;
         var top = graphData.nodes
@@ -1012,6 +1028,7 @@ self.addEventListener('message', async (e) => {
       name: 'documents-mentions', label: 'Documents → entities', hasN: true, defaultN: 20,
       desc: 'Top N documents by MENTIONS out-degree + the entities they mention (cap 200 entities).',
       rels: ['MENTIONS'],
+      requires: { rels: ['MENTIONS'], types: ['Document'] },
       compute: function(opts) {
         var n = opts.n || 20;
         var counts = {};
@@ -1041,9 +1058,54 @@ self.addEventListener('message', async (e) => {
 
   var activePreset = null;
 
+  function presetApplies(p) {
+    var req = p.requires;
+    if (!req) return true;
+    if (req.types) {
+      for (var i = 0; i < req.types.length; i++) {
+        if (nodeTypes.indexOf(req.types[i]) === -1) return false;
+      }
+    }
+    if (req.rels) {
+      for (var j = 0; j < req.rels.length; j++) {
+        if (edgeTypes.indexOf(req.rels[j]) === -1) return false;
+      }
+    }
+    if (req.seeds) {
+      // nodeIndex isn't built yet when renderPresets() runs; scan graphData directly.
+      for (var k = 0; k < req.seeds.length; k++) {
+        var seed = req.seeds[k];
+        var hit = false;
+        for (var sn = 0; sn < graphData.nodes.length; sn++) {
+          if (graphData.nodes[sn].id === seed) { hit = true; break; }
+        }
+        if (!hit) return false;
+      }
+    }
+    if (req.propertyOnType) {
+      var pot = req.propertyOnType;
+      var found = false;
+      for (var m = 0; m < graphData.nodes.length && !found; m++) {
+        var nn = graphData.nodes[m];
+        if (nn.type !== pot.type) continue;
+        var props = nn.properties || {};
+        for (var f = 0; f < pot.anyOf.length; f++) {
+          if (props[pot.anyOf[f]] != null) { found = true; break; }
+        }
+      }
+      if (!found) return false;
+    }
+    return true;
+  }
+
   function renderPresets() {
     var list = document.getElementById('preset-list');
-    list.innerHTML = PRESETS.map(function(p) {
+    var applicable = PRESETS.filter(presetApplies);
+    if (applicable.length === 0) {
+      list.innerHTML = '<div style="color:var(--text-dim);font-size:11px">No presets match this domain’s schema.</div>';
+      return;
+    }
+    list.innerHTML = applicable.map(function(p) {
       var input = '';
       if (p.hasQ) input = '<input type="text" class="preset-q" placeholder="topic..." value="' + escapeHtml(p.defaultQ || '') + '" data-preset="' + p.name + '">';
       else if (p.hasN) input = '<input type="number" class="preset-n" min="1" max="100" value="' + p.defaultN + '" data-preset="' + p.name + '">';

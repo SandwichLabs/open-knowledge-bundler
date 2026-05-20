@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/sandwich-labs/chicago-business-intelligence/cli/domain"
 	"github.com/sandwich-labs/chicago-business-intelligence/cli/store"
@@ -115,15 +116,17 @@ Output:
 		}
 		log.Printf("Wrote %s", embPath)
 
-		// manifest.json
+		// manifest.json — generated_at doubles as a cache-bust token so old
+		// browser Cache API entries from a prior bundle don't shadow new content.
 		manifest := map[string]any{
-			"domain_name":   domainName,
-			"embedding_dim": embDim,
+			"domain_name":     domainName,
+			"embedding_dim":   embDim,
 			"embedding_model": embModel,
-			"dtype":         "float32",
-			"node_count":    len(nodes),
-			"edge_count":    len(edges),
-			"format_version": 1,
+			"dtype":           "float32",
+			"node_count":      len(nodes),
+			"edge_count":      len(edges),
+			"format_version":  1,
+			"generated_at":    time.Now().UTC().Format(time.RFC3339),
 		}
 		manifestPath := filepath.Join(generateOutDir, "manifest.json")
 		if err := writeJSONFile(manifestPath, manifest); err != nil {
