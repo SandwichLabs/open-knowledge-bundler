@@ -231,6 +231,13 @@ body {
   font-family: monospace;
   color: var(--text-dim);
 }
+.src-link {
+  color: var(--accent);
+  font-size: 11px;
+  text-decoration: none;
+  margin-left: 6px;
+}
+.src-link:hover { text-decoration: underline; }
 
 /* Graph */
 #graph-container {
@@ -726,6 +733,24 @@ self.addEventListener('message', async (e) => {
     return p.name || p.title || p.legal_name || p.type_name || (p.summary || '').slice(0, 40) || (n && n.id) || '';
   }
 
+  // "Open source" affordance for the static bundle.
+  // We can only follow external (http/https) URLs — there's no host process to
+  // invoke the OS file handler, and modern browsers block file:// links from
+  // http(s):// origins. Local-only sources (File, Symbol, Spec without `url`)
+  // are intentionally not rendered as openable links here; that affordance is
+  // only available in `cbi serve`.
+  function sourceLinkHTML(n) {
+    if (!n) return '';
+    const p = n.properties || {};
+    const t = n.type;
+    if (t === 'Spec' && p.url) {
+      return ' <a class="src-link" href="' + escapeHtml(p.url) + '" target="_blank" rel="noopener" ' +
+             'title="Open the source document in Confluence" ' +
+             'onclick="event.stopPropagation()">Open in Confluence ↗</a>';
+    }
+    return '';
+  }
+
   // ---- Worker spawn (loads graph.json + embeddings.bin in the background)
   setProgress(0.005, 'Starting worker...');
   const blob = new Blob([WORKER_SOURCE], { type: 'application/javascript' });
@@ -997,6 +1022,7 @@ self.addEventListener('message', async (e) => {
         '<span class="badge" style="background:' + (typeColorMap[n.type] || '#888') + '">' + escapeHtml(n.type) + '</span>' +
         '<div class="title">' + escapeHtml(nodeLabel(n)) + '</div>' +
         '<div class="id">' + escapeHtml(id) + '</div>' +
+        (sourceLinkHTML(n) ? '<div style="margin-top:6px">' + sourceLinkHTML(n) + '</div>' : '') +
       '</div>' +
       '<div class="section"><h3>Properties</h3>' +
         '<table class="props-table">' + (propsHtml || '<tr><td colspan="2" style="color:var(--text-dim)">None</td></tr>') + '</table>' +
@@ -1354,7 +1380,7 @@ self.addEventListener('message', async (e) => {
         '<span class="result-score">' + r.score.toFixed(3) + '</span>' +
         '<div><span class="result-type" style="background:' + (typeColorMap[n.type] || '#888') + '">' + escapeHtml(n.type) + '</span>' +
         '<span style="font-size:13px;font-weight:500">' + escapeHtml(title) + '</span></div>' +
-        '<div class="result-meta">' + escapeHtml(r.node_id) + '</div>' +
+        '<div class="result-meta">' + escapeHtml(r.node_id) + sourceLinkHTML(n) + '</div>' +
         '</div>';
     }).join('');
     $('results').querySelectorAll('.result-card').forEach(card => {

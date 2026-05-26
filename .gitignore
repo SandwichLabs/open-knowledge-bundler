@@ -45,3 +45,5 @@ tmpdata/
 
 # Generated OKF test bundles
 test/okf-bundle/
+examples/
+repos/

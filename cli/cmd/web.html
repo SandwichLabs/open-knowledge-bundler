@@ -38,6 +38,8 @@
   .hit .name { font-size:13px; }
   .hit .meta { color:var(--muted); font-size:11px; margin-top:3px; }
   .hit .score { float:right; color:var(--muted); font-size:10px; font-family:monospace; }
+  .src-link { color:var(--accent); font-size:11px; text-decoration:none; margin-left:6px; }
+  .src-link:hover { text-decoration:underline; }
 
   .section-label { font-size:10px; color:var(--muted); text-transform:uppercase;
                    letter-spacing:0.05em; margin:14px 0 6px; }
@@ -110,6 +112,9 @@
 
     <div class="section-label">Preset graph queries</div>
     <div id="presets"><div class="loading">loading…</div></div>
+
+    <div class="section-label">Example queries (from config)</div>
+    <div id="example-queries"><div class="loading">loading…</div></div>
   </section>
 
   <section id="graph">
@@ -149,6 +154,79 @@ function escapeHtml(s) {
 function nodeLabel(n) {
   const p = n.properties || {};
   return p.name || p.title || (p.summary || '').slice(0,40) || n.node_id;
+}
+
+// ---- "Open source" affordance ----------------------------------------------
+// Returns {label, href, external, openPath, line} or null if there's no source
+// to open for this node type.
+//   - external link (Spec.url): plain anchor, opens in a new tab
+//   - openPath: path under the workspace; click hits /api/open on the host
+function sourceTarget(n) {
+  if (!n) return null;
+  const p = n.properties || {};
+  const t = n.node_type || n.type;
+  if (t === 'Spec') {
+    if (p.url) return { label: 'Open in Confluence', href: p.url, external: true };
+    if (p.doc_path) return { label: 'Open markdown', openPath: 'data/converted_documents/' + p.doc_path };
+    return null;
+  }
+  if (t === 'File') {
+    if (p.repo && p.path) return { label: 'Open file', openPath: 'repos/' + p.repo + '/' + p.path };
+    return null;
+  }
+  if (t === 'Symbol') {
+    // file_id is of the form `file:<repo>/<path>`; strip the prefix.
+    const fid = p.file_id || '';
+    if (fid.startsWith('file:')) {
+      const path = fid.slice('file:'.length);
+      const line = (typeof p.start_line === 'number') ? p.start_line : parseInt(p.start_line, 10) || null;
+      return { label: 'Open file' + (line ? ' at line ' + line : ''),
+               openPath: 'repos/' + path, line };
+    }
+    return null;
+  }
+  return null; // Concept and unknown types
+}
+
+async function openLocal(path, line) {
+  const params = new URLSearchParams({ path });
+  if (line) params.set('line', String(line));
+  const r = await fetch('/api/open?' + params.toString());
+  if (!r.ok) {
+    const t = await r.text();
+    alert('Could not open file: ' + t);
+  }
+}
+
+// Renders the affordance as a small inline element. `stopProp` controls whether
+// click bubbling is suppressed (so the parent search-result handler doesn't
+// fire when the user clicks the link).
+function sourceLinkHTML(n) {
+  const tgt = sourceTarget(n);
+  if (!tgt) return '';
+  if (tgt.external) {
+    return ' <a class="src-link" href="' + escapeHtml(tgt.href) + '" target="_blank" rel="noopener" ' +
+           'title="Open the source document">' + escapeHtml(tgt.label) + ' ↗</a>';
+  }
+  const dataLine = tgt.line ? ' data-open-line="' + tgt.line + '"' : '';
+  return ' <a class="src-link" href="#" data-open-path="' + escapeHtml(tgt.openPath) + '"' + dataLine +
+         ' title="Opens with the OS\'s default app for this file type">' + escapeHtml(tgt.label) + '</a>';
+}
+
+// Wires click handlers on .src-link elements inside `root`.
+function bindSourceLinks(root) {
+  root.querySelectorAll('a.src-link[data-open-path]').forEach(a => {
+    a.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const line = a.dataset.openLine ? parseInt(a.dataset.openLine, 10) : null;
+      openLocal(a.dataset.openPath, line);
+    });
+  });
+  // External links also need to not bubble to the result card.
+  root.querySelectorAll('a.src-link[target="_blank"]').forEach(a => {
+    a.addEventListener('click', (e) => e.stopPropagation());
+  });
 }
 
 // ---------- D3 graph state ----------
@@ -278,12 +356,14 @@ async function expandNode(id) {
 function showDetail(data) {
   const n = data.node;
   const p = n.properties || {};
+  const srcLink = sourceLinkHTML(n);
   let html = `
     <div style="margin-bottom:10px">
       <div style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${COLORS[n.node_type] || '#888'};margin-right:6px"></div>
       <span style="font-size:10px;color:var(--muted);text-transform:uppercase">${n.node_type}</span>
       <div style="font-size:14px;font-weight:600;margin:3px 0">${escapeHtml(nodeLabel(n))}</div>
       <div style="font-size:10px;color:var(--muted);font-family:monospace">${n.node_id}</div>
+      ${srcLink ? `<div style="margin-top:6px">${srcLink}</div>` : ''}
     </div>
     <pre>${escapeHtml(JSON.stringify(p, null, 2))}</pre>`;
   if (data.edges && data.edges.length) {
@@ -300,6 +380,7 @@ function showDetail(data) {
     }
   }
   $('detail').innerHTML = html;
+  bindSourceLinks($('detail'));
 }
 
 // ---------- Search ----------
@@ -322,13 +403,80 @@ async function search() {
         <span class="score">${(r.rrf_score ?? 0).toFixed(4)}</span>
         <span class="ntype" style="background:${color}">${r.node_type}</span>
         <span class="name">${escapeHtml(nodeLabel(r)).slice(0,80)}</span>
-        <div class="meta">${p.role ? '<em>' + escapeHtml(p.role) + '</em> · ' : ''}<code>${r.node_id}</code></div>`;
+        <div class="meta">${p.role ? '<em>' + escapeHtml(p.role) + '</em> · ' : ''}<code>${r.node_id}</code>${sourceLinkHTML(r)}</div>`;
       el.onclick = () => seedFromResult(r);
       results.appendChild(el);
+      bindSourceLinks(el);
     }
   } catch (e) {
     results.innerHTML = `<div class="err">${escapeHtml(String(e))}</div>`;
   }
+}
+
+// ---------- Example queries (loaded from domain.yaml example_queries:) ----------
+async function loadExampleQueries() {
+  try {
+    const list = await api('/api/queries');
+    const root = $('example-queries');
+    root.innerHTML = '';
+    if (!Array.isArray(list) || list.length === 0) {
+      root.innerHTML = '<div class="loading" style="font-size:11px">No example_queries: in domain.yaml</div>';
+      return;
+    }
+    for (const q of list) {
+      const el = document.createElement('div');
+      el.className = 'preset';
+      el.title = q.sql || '';
+      el.innerHTML = `<div class="ptitle">${escapeHtml(q.name || '(unnamed)')}</div>
+                      <div class="pdesc">${escapeHtml(q.description || '')}</div>`;
+      el.addEventListener('click', () => runExampleQuery(q));
+      root.appendChild(el);
+    }
+  } catch (e) {
+    $('example-queries').innerHTML = `<div class="err">${escapeHtml(String(e))}</div>`;
+  }
+}
+
+async function runExampleQuery(q) {
+  $('detail').innerHTML = `<div class="loading">running ${escapeHtml(q.name)}…</div>`;
+  try {
+    const params = new URLSearchParams({ q: q.sql });
+    const rows = await api(`/api/sql?${params.toString()}`);
+    renderExampleQueryResult(q, rows);
+  } catch (e) {
+    $('detail').innerHTML = `<h2>${escapeHtml(q.name)}</h2>
+      <div class="pdesc" style="margin-bottom:8px">${escapeHtml(q.description || '')}</div>
+      <div class="err">${escapeHtml(String(e))}</div>
+      <pre style="font-size:11px;color:var(--muted);white-space:pre-wrap;margin-top:8px">${escapeHtml(q.sql || '')}</pre>`;
+  }
+}
+
+function renderExampleQueryResult(q, rows) {
+  const out = [];
+  out.push(`<h2>${escapeHtml(q.name)}</h2>`);
+  if (q.description) {
+    out.push(`<div class="pdesc" style="margin-bottom:8px">${escapeHtml(q.description)}</div>`);
+  }
+  out.push(`<div style="font-size:11px;color:var(--muted);margin-bottom:8px">${rows.length} row${rows.length===1?'':'s'}${rows.length>=1000?' (capped)':''}</div>`);
+  if (!rows.length) {
+    out.push('<div class="loading" style="font-size:11px">No rows returned.</div>');
+  } else {
+    const cols = Array.from(rows.reduce((s, r) => { Object.keys(r).forEach(k => s.add(k)); return s; }, new Set()));
+    out.push('<div style="overflow:auto;max-width:100%"><table style="border-collapse:collapse;font-size:11px;width:100%">');
+    out.push('<thead><tr>' + cols.map(c => `<th style="text-align:left;padding:4px 6px;border-bottom:1px solid #2a2f37;color:var(--muted);font-weight:600">${escapeHtml(c)}</th>`).join('') + '</tr></thead>');
+    out.push('<tbody>');
+    for (const r of rows) {
+      out.push('<tr>' + cols.map(c => {
+        const v = r[c];
+        const s = (v === null || v === undefined) ? '' : (typeof v === 'object' ? JSON.stringify(v) : String(v));
+        const truncated = s.length > 140 ? s.slice(0, 140) + '…' : s;
+        return `<td style="padding:4px 6px;border-bottom:1px solid #1a1d22;vertical-align:top" title="${escapeHtml(s)}">${escapeHtml(truncated)}</td>`;
+      }).join('') + '</tr>');
+    }
+    out.push('</tbody></table></div>');
+  }
+  out.push(`<details style="margin-top:10px"><summary style="cursor:pointer;font-size:11px;color:var(--muted)">SQL</summary><pre style="font-size:11px;white-space:pre-wrap;margin:6px 0 0 0">${escapeHtml(q.sql || '')}</pre></details>`);
+  $('detail').innerHTML = out.join('');
 }
 
 // ---------- Presets ----------
@@ -422,6 +570,7 @@ function init() {
   }).catch(() => {});
 
   loadPresetList();
+  loadExampleQueries();
 }
 
 init();

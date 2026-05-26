@@ -7,21 +7,29 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/sandwich-labs/chicago-business-intelligence/cli/embed"
-	"github.com/sandwich-labs/chicago-business-intelligence/cli/store"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"gopkg.in/yaml.v3"
+
+	"github.com/sandwich-labs/chicago-business-intelligence/cli/domain"
+	"github.com/sandwich-labs/chicago-business-intelligence/cli/embed"
+	"github.com/sandwich-labs/chicago-business-intelligence/cli/store"
 )
 
 //go:embed web.html
 var webHTML []byte
 
 var (
-	serveAddr string
+	serveAddr      string
+	serveWorkspace string
 )
 
 var serveCmd = &cobra.Command{
@@ -44,6 +52,23 @@ Endpoints:
 		endpointURL := viper.GetString("endpoint_url")
 		model := viper.GetString("embedding_model")
 		domainName := viper.GetString("domain_name")
+
+		// Resolve workspace root (used to confine /api/open targets).
+		workspace, err := resolveWorkspace(serveWorkspace)
+		if err != nil {
+			return fmt.Errorf("resolving workspace: %w", err)
+		}
+		log.Printf("Workspace root (open-handler base): %s", workspace)
+
+		// Read example_queries straight from the YAML — viper lowercases map
+		// keys, which is fine for our scalar values but the existing pattern
+		// in generate.go bypasses viper for structured config sections.
+		queries, err := readExampleQueries(viper.ConfigFileUsed())
+		if err != nil {
+			log.Printf("warning: reading example_queries: %v", err)
+		} else if len(queries) > 0 {
+			log.Printf("Loaded %d example queries from %s", len(queries), viper.ConfigFileUsed())
+		}
 
 		db, err := store.Open(dbPath)
 		if err != nil {
@@ -84,13 +109,24 @@ Endpoints:
 		mux.HandleFunc("/api/preset", func(w http.ResponseWriter, r *http.Request) {
 			handlePreset(w, r, db)
 		})
+		mux.HandleFunc("/api/open", func(w http.ResponseWriter, r *http.Request) {
+			handleOpen(w, r, workspace)
+		})
+		mux.HandleFunc("/api/queries", func(w http.ResponseWriter, r *http.Request) {
+			writeJSON(w, 200, queries)
+		})
 
 		srv := &http.Server{
 			Addr:              serveAddr,
 			Handler:           mux,
 			ReadHeaderTimeout: 10 * time.Second,
 		}
-		log.Printf("cbi serve listening on http://%s (domain=%s db=%s)", serveAddr, domainName, dbPath)
+		log.Printf(
+			"cbi serve listening on http://%s (domain=%s db=%s)",
+			serveAddr,
+			domainName,
+			dbPath,
+		)
 		return srv.ListenAndServe()
 	},
 }
@@ -134,12 +170,16 @@ func handleStats(w http.ResponseWriter, _ *http.Request, db *store.DB, domainNam
 		return out, total, rows.Err()
 	}
 
-	byType, nodeTotal, err := getKV("SELECT node_type, COUNT(*) FROM Nodes_Base WHERE is_current GROUP BY 1 ORDER BY 2 DESC")
+	byType, nodeTotal, err := getKV(
+		"SELECT node_type, COUNT(*) FROM Nodes_Base WHERE is_current GROUP BY 1 ORDER BY 2 DESC",
+	)
 	if err != nil {
 		writeErr(w, 500, err)
 		return
 	}
-	byRel, edgeTotal, err := getKV("SELECT relationship_type, COUNT(*) FROM Edges_Base WHERE is_current GROUP BY 1 ORDER BY 2 DESC")
+	byRel, edgeTotal, err := getKV(
+		"SELECT relationship_type, COUNT(*) FROM Edges_Base WHERE is_current GROUP BY 1 ORDER BY 2 DESC",
+	)
 	if err != nil {
 		writeErr(w, 500, err)
 		return
@@ -286,7 +326,14 @@ func handleSQL(w http.ResponseWriter, r *http.Request, db *store.DB) {
 	upper := strings.ToUpper(strings.TrimSpace(q))
 	for _, banned := range []string{"INSERT ", "UPDATE ", "DELETE ", "DROP ", "ALTER ", "CREATE ", "ATTACH ", "COPY ", "PRAGMA "} {
 		if strings.Contains(upper, banned) {
-			writeErr(w, 400, fmt.Errorf("only read-only queries allowed (blocked %s)", strings.TrimSpace(banned)))
+			writeErr(
+				w,
+				400,
+				fmt.Errorf(
+					"only read-only queries allowed (blocked %s)",
+					strings.TrimSpace(banned),
+				),
+			)
 			return
 		}
 	}
@@ -324,7 +371,151 @@ func escapeSQL(s string) string {
 	return strings.ReplaceAll(s, "'", "''")
 }
 
+// resolveWorkspace picks the base directory under which /api/open will permit
+// targets. Preference order:
+//  1. --workspace flag (if set)
+//  2. parent of the current working directory (typical: cwd is the domain dir,
+//     parent contains repos/ and data/)
+//  3. current working directory as a fallback.
+func resolveWorkspace(flag string) (string, error) {
+	var candidate string
+	if flag != "" {
+		candidate = flag
+	} else {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return "", err
+		}
+		parent := filepath.Dir(cwd)
+		if parent != "" && parent != cwd {
+			candidate = parent
+		} else {
+			candidate = cwd
+		}
+	}
+	abs, err := filepath.Abs(candidate)
+	if err != nil {
+		return "", err
+	}
+	resolved, err := filepath.EvalSymlinks(abs)
+	if err != nil {
+		// Directory must exist; if EvalSymlinks fails, return the abs path.
+		resolved = abs
+	}
+	info, err := os.Stat(resolved)
+	if err != nil {
+		return "", fmt.Errorf("workspace %s: %w", resolved, err)
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("workspace %s is not a directory", resolved)
+	}
+	return resolved, nil
+}
+
+// handleOpen invokes the OS file-type handler on a path inside the workspace.
+// Returns 204 on success. The request is confined to the workspace root.
+//
+// Query params:
+//
+//	path  required, absolute or workspace-relative path
+//	line  optional, line number; if `code` is on PATH we use `code -g <path>:<line>`
+func handleOpen(w http.ResponseWriter, r *http.Request, workspace string) {
+	raw := strings.TrimSpace(r.URL.Query().Get("path"))
+	if raw == "" {
+		writeErr(w, 400, fmt.Errorf("missing ?path"))
+		return
+	}
+	lineStr := strings.TrimSpace(r.URL.Query().Get("line"))
+
+	// Resolve target relative to workspace if not absolute.
+	target := raw
+	if !filepath.IsAbs(target) {
+		target = filepath.Join(workspace, target)
+	}
+	abs, err := filepath.Abs(target)
+	if err != nil {
+		writeErr(w, 400, fmt.Errorf("invalid path: %w", err))
+		return
+	}
+	// Resolve symlinks before the containment check to prevent escape via symlink.
+	resolved, err := filepath.EvalSymlinks(abs)
+	if err != nil {
+		writeErr(w, 404, fmt.Errorf("file not found: %s", raw))
+		return
+	}
+	// Containment check: resolved path must be inside workspace.
+	rel, err := filepath.Rel(workspace, resolved)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		writeErr(w, 403, fmt.Errorf("path escapes workspace"))
+		return
+	}
+	if _, err := os.Stat(resolved); err != nil {
+		writeErr(w, 404, fmt.Errorf("file not found: %s", raw))
+		return
+	}
+
+	// Pick the command to run. If a line is supplied and `code` (VS Code CLI) is
+	// available, prefer it because it can jump to the line. Otherwise fall back
+	// to the OS's default opener, which dispatches to the registered handler.
+	var c *exec.Cmd
+	if lineStr != "" {
+		if _, err := strconv.Atoi(lineStr); err == nil {
+			if codePath, err := exec.LookPath("code"); err == nil {
+				c = exec.Command(codePath, "-g", resolved+":"+lineStr)
+			}
+		}
+	}
+	if c == nil {
+		switch runtime.GOOS {
+		case "darwin":
+			c = exec.Command("open", resolved)
+		case "linux":
+			c = exec.Command("xdg-open", resolved)
+		case "windows":
+			c = exec.Command("rundll32", "url.dll,FileProtocolHandler", resolved)
+		default:
+			writeErr(w, 501, fmt.Errorf("open not supported on %s", runtime.GOOS))
+			return
+		}
+	}
+	if err := c.Start(); err != nil {
+		writeErr(w, 500, fmt.Errorf("launching opener: %w", err))
+		return
+	}
+	// Reap the child asynchronously so we don't leave zombies on Linux.
+	go func() { _ = c.Wait() }()
+	log.Printf("open: %s%s", resolved, func() string {
+		if lineStr != "" {
+			return ":" + lineStr
+		}
+		return ""
+	}())
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// readExampleQueries pulls the optional example_queries: list straight from
+// the YAML config (bypassing viper, which mangles structured values). Mirrors
+// the readDefinitions pattern in generate.go.
+func readExampleQueries(path string) ([]domain.ExampleQuery, error) {
+	if path == "" {
+		path = "domain.yaml"
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var doc struct {
+		ExampleQueries []domain.ExampleQuery `yaml:"example_queries"`
+	}
+	if err := yaml.Unmarshal(raw, &doc); err != nil {
+		return nil, err
+	}
+	return doc.ExampleQueries, nil
+}
+
 func init() {
 	serveCmd.Flags().StringVar(&serveAddr, "addr", "127.0.0.1:8765", "listen address")
-	siteCmd.AddCommand(serveCmd)
+	serveCmd.Flags().StringVar(&serveWorkspace, "workspace", "",
+		"base directory under which /api/open may open files (default: parent of cwd)")
+	rootCmd.AddCommand(serveCmd)
 }
