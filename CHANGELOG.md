@@ -50,6 +50,21 @@ Behavior notes:
   doesn't match the bundle's index, `hybrid_search` drops to lexical-only and the
   TUI status bar says so.
 
+### Added — `cbi agent --ask --json` (machine-readable one-shot)
+
+`--ask` paired with `--json` emits a single JSON object on stdout instead of
+streamed prose, so an eval harness can grade without scraping text. The object
+carries the final `answer`, the `tool_calls` trace (name + raw input, in call
+order — lets you measure tool selection and SQL authoring), `steps`, token
+`usage`, `duration_ms`, `vector_ok`, and any `warning`/`error`. kronk's own
+download/load logging (which writes to stdout) is redirected to stderr in this
+mode so stdout stays pure JSON. This is the enabling primitive for the planned
+benchmark driver (sweep model tier × domain, score answers against a key).
+
+Caveat: `usage.output_tokens` is whatever the kronk provider reports per step,
+which under-counts generated tokens today; `duration_ms` is the reliable local
+cost signal.
+
 ### Added — store helpers
 
 - `store.RawQueryArgs(query, args...)` and exported `store.ScanSearchRows` to

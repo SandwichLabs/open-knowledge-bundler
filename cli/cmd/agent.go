@@ -17,6 +17,7 @@ var (
 	agentProcessor   string
 	agentReconfigure bool
 	agentAsk         string
+	agentJSON        bool
 )
 
 var agentCmd = &cobra.Command{
@@ -53,11 +54,16 @@ Examples:
 
 		// 2. Force the llama.cpp backend before any kronk call (the embedded
 		//    provider's libs loader reads KRONK_PROCESSOR too).
+		// In --json mode keep stdout pure (JSON only); send setup chatter to stderr.
+		progress := os.Stdout
+		if agentJSON {
+			progress = os.Stderr
+		}
 		if cfg.Processor != "" {
 			if err := os.Setenv("KRONK_PROCESSOR", cfg.Processor); err != nil {
 				return fmt.Errorf("setting KRONK_PROCESSOR: %w", err)
 			}
-			fmt.Printf("llama.cpp backend: %s\n", cfg.Processor)
+			fmt.Fprintf(progress, "llama.cpp backend: %s\n", cfg.Processor)
 		}
 
 		// 3. Load the bundle.
@@ -75,8 +81,8 @@ Examples:
 
 		// 5. Wire the session (downloads + loads happen here, with progress).
 		ctx := context.Background()
-		sess, err := agent.NewSession(ctx, bundle, llmSource, embedSource, func(format string, a ...any) {
-			fmt.Printf(format+"\n", a...)
+		sess, err := agent.NewSession(ctx, bundle, llmSource, embedSource, agentJSON, func(format string, a ...any) {
+			fmt.Fprintf(progress, format+"\n", a...)
 		})
 		if err != nil {
 			return err
@@ -85,6 +91,9 @@ Examples:
 
 		// 6. Chat (interactive TUI) or answer a single question (--ask).
 		if agentAsk != "" {
+			if agentJSON {
+				return sess.RunOnceJSON(ctx, agentAsk, llmSource)
+			}
 			return sess.RunOnce(ctx, agentAsk)
 		}
 		return sess.Run(ctx)
@@ -99,6 +108,7 @@ func init() {
 	agentCmd.Flags().StringVar(&agentProcessor, "gpu", "", "llama.cpp backend (cpu|cuda|rocm|vulkan); overrides config")
 	agentCmd.Flags().BoolVar(&agentReconfigure, "reconfigure", false, "re-run the model size picker")
 	agentCmd.Flags().StringVar(&agentAsk, "ask", "", "answer a single question non-interactively and exit (no TUI)")
+	agentCmd.Flags().BoolVar(&agentJSON, "json", false, "with --ask, emit a structured JSON result (answer, tool trace, tokens, timing) to stdout")
 	_ = agentCmd.MarkFlagRequired("bundle")
 	rootCmd.AddCommand(agentCmd)
 }

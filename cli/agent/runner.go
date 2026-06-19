@@ -10,11 +10,15 @@ import (
 )
 
 // NewProvider creates the kronk LLM provider. Download/install progress is
-// printed to stdout via the provider logger (so do this before the TUI starts).
-func NewProvider() (fantasy.Provider, error) {
+// printed via the provider logger (so do this before the TUI starts). Pass nil
+// to use the default stdout FmtLogger.
+func NewProvider(logger kronkprov.Logger) (fantasy.Provider, error) {
+	if logger == nil {
+		logger = kronkprov.FmtLogger
+	}
 	return kronkprov.New(
 		kronkprov.WithName("cbi"),
-		kronkprov.WithLogger(kronkprov.FmtLogger),
+		kronkprov.WithLogger(logger),
 	)
 }
 
@@ -49,8 +53,10 @@ type StreamHandler struct {
 }
 
 // Stream runs one user turn, invoking the handler callbacks as events arrive,
-// and appends the exchange to the conversation history on success.
-func (r *Runner) Stream(ctx context.Context, prompt string, h StreamHandler) {
+// and appends the exchange to the conversation history on success. It also
+// returns the underlying agent result (final response, steps, token usage) so
+// non-interactive callers can capture structured metrics.
+func (r *Runner) Stream(ctx context.Context, prompt string, h StreamHandler) (*fantasy.AgentResult, error) {
 	call := fantasy.AgentStreamCall{
 		Prompt:   prompt,
 		Messages: r.history,
@@ -90,6 +96,7 @@ func (r *Runner) Stream(ctx context.Context, prompt string, h StreamHandler) {
 	if h.OnDone != nil {
 		h.OnDone(err)
 	}
+	return res, err
 }
 
 // BuildSystemPrompt composes the agent's system prompt from the bundle's skill

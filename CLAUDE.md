@@ -30,6 +30,7 @@ cbi generate okf -o okf/ [--mode both|catalog|full] [--node-types ...] [--max-pe
 cbi generate okf --skill --include-db                  # OKF bundle as a self-contained agent skill (SKILL.md + .duckdb + domain.yaml)
 cbi agent --bundle ./okf-bundle                        # Chat TUI over a bundle, fully local (kronk LLM + embeddings)
 cbi agent --bundle ./okf-bundle --ask "question"       # One-shot, non-interactive answer (no TUI)
+cbi agent --bundle ./okf-bundle --ask "question" --json # One-shot structured result (answer + tool trace + tokens + timing) on stdout — for eval harnesses
 cbi agent --bundle ./okf-bundle --tier large --gpu vulkan  # Pick model size / llama.cpp backend
 ```
 

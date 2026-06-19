@@ -2,11 +2,13 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"time"
 
 	"charm.land/fantasy"
+	kronkprov "charm.land/fantasy/providers/kronk"
 	"github.com/ardanlabs/kronk/sdk/kronk/applog"
 	"github.com/sandwich-labs/chicago-business-intelligence/cli/store"
 )
@@ -20,8 +22,9 @@ type Session struct {
 	provider fantasy.Provider
 	runner   *Runner
 
-	Info string // status-bar label (models in use)
-	Warn string // optional warning banner (e.g. lexical-only)
+	Info     string // status-bar label (models in use)
+	Warn     string // optional warning banner (e.g. lexical-only)
+	VectorOK bool   // whether the vector channel is live (vs lexical-only)
 }
 
 // Logf is an optional progress sink for setup (model downloads, etc.).
@@ -31,12 +34,24 @@ type Logf func(format string, args ...any)
 // kronk, wires the tools, and builds the chat runner. Heavy work (downloads,
 // model loads) happens here and reports progress through log; run it before
 // starting the TUI.
-func NewSession(ctx context.Context, bundle *Bundle, llmSource, embedSource string, log Logf) (*Session, error) {
+// quietStdout, when true, routes kronk's own progress logging (model/library
+// downloads) to stderr so stdout stays clean for machine-readable output
+// (--json). The setup progress sink (log) is the caller's to direct.
+func NewSession(ctx context.Context, bundle *Bundle, llmSource, embedSource string, quietStdout bool, log Logf) (*Session, error) {
 	if log == nil {
 		log = func(string, ...any) {}
 	}
 
 	s := &Session{bundle: bundle}
+
+	// kronk's bundled FmtLogger writes to stdout; redirect to stderr when the
+	// caller needs a clean stdout.
+	var provLogger kronkprov.Logger
+	embedLogger := applog.FmtLogger
+	if quietStdout {
+		provLogger = stderrKronkLogger
+		embedLogger = stderrKronkLogger
+	}
 
 	// Database.
 	db, err := store.Open(bundle.DBPath)
@@ -51,7 +66,7 @@ func NewSession(ctx context.Context, bundle *Bundle, llmSource, embedSource stri
 
 	// Language model (downloads on first use).
 	log("Loading language model %s … (first run downloads llama.cpp + the model)", llmSource)
-	provider, err := NewProvider()
+	provider, err := NewProvider(provLogger)
 	if err != nil {
 		s.Close()
 		return nil, fmt.Errorf("creating kronk provider: %w", err)
@@ -67,7 +82,7 @@ func NewSession(ctx context.Context, bundle *Bundle, llmSource, embedSource stri
 	vectorOK := false
 	dim := bundle.Config.EmbeddingDim
 	log("Loading embedding model %s …", embedSource)
-	embedder, eerr := NewEmbedder(ctx, embedSource, dim, applog.FmtLogger)
+	embedder, eerr := NewEmbedder(ctx, embedSource, dim, embedLogger)
 	switch {
 	case eerr != nil:
 		s.Warn = fmt.Sprintf("embeddings unavailable (%v) — hybrid_search runs lexical-only", eerr)
@@ -89,6 +104,8 @@ func NewSession(ctx context.Context, bundle *Bundle, llmSource, embedSource stri
 			vectorOK = true
 		}
 	}
+
+	s.VectorOK = vectorOK
 
 	// Tools.
 	ts := &toolset{db: db, bundle: bundle, embedder: s.embedder, vectorOK: vectorOK}
@@ -133,6 +150,83 @@ func (s *Session) RunOnce(ctx context.Context, prompt string) error {
 	})
 	fmt.Println()
 	return runErr
+}
+
+// AskResult is the machine-readable result of a single non-interactive turn,
+// emitted by RunOnceJSON. It carries the final answer, the tool-call trace, and
+// token/timing metrics so an external eval harness can grade without scraping
+// streamed prose.
+type AskResult struct {
+	Question   string         `json:"question"`
+	Answer     string         `json:"answer"`
+	ToolCalls  []AskToolCall  `json:"tool_calls"`
+	Steps      int            `json:"steps"`
+	Usage      AskUsage       `json:"usage"`
+	DurationMS int64          `json:"duration_ms"`
+	VectorOK   bool           `json:"vector_ok"`
+	Model      string         `json:"model"`
+	Bundle     string         `json:"bundle"`
+	Warning    string         `json:"warning,omitempty"`
+	Error      string         `json:"error,omitempty"`
+}
+
+// AskToolCall records one tool invocation (name + raw JSON input) in call order.
+type AskToolCall struct {
+	Name  string `json:"name"`
+	Input string `json:"input"`
+}
+
+// AskUsage is the token accounting for a turn.
+type AskUsage struct {
+	InputTokens  int64 `json:"input_tokens"`
+	OutputTokens int64 `json:"output_tokens"`
+	TotalTokens  int64 `json:"total_tokens"`
+}
+
+// RunOnceJSON answers a single prompt and writes one JSON object (an AskResult)
+// to stdout. Nothing else goes to stdout, so the output is safe to pipe into a
+// grader. Errors are reported inside the JSON (and returned) rather than printed
+// loose. The model/llmSource label is passed in by the caller.
+func (s *Session) RunOnceJSON(ctx context.Context, prompt, model string) error {
+	tctx, cancel := context.WithTimeout(ctx, turnTimeout)
+	defer cancel()
+
+	out := AskResult{
+		Question: prompt,
+		VectorOK: s.VectorOK,
+		Model:    model,
+		Bundle:   s.bundle.Name(),
+		Warning:  s.Warn,
+	}
+
+	start := time.Now()
+	res, err := s.runner.Stream(tctx, prompt, StreamHandler{
+		OnToolCall: func(n, in string) {
+			out.ToolCalls = append(out.ToolCalls, AskToolCall{Name: n, Input: in})
+		},
+	})
+	out.DurationMS = time.Since(start).Milliseconds()
+
+	if err != nil {
+		out.Error = err.Error()
+	}
+	if res != nil {
+		out.Answer = res.Response.Content.Text()
+		out.Steps = len(res.Steps)
+		out.Usage = AskUsage{
+			InputTokens:  res.TotalUsage.InputTokens,
+			OutputTokens: res.TotalUsage.OutputTokens,
+			TotalTokens:  res.TotalUsage.TotalTokens,
+		}
+	}
+
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", "  ")
+	if encErr := enc.Encode(out); encErr != nil {
+		return encErr
+	}
+	return err
 }
 
 // Close releases the database, embedding model, and LLM provider.
