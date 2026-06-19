@@ -25,6 +25,9 @@ cbi ingest --file data.json                             # Single JSON mode ({nod
 cbi query --text "search" --limit 10 [--date 2025-01-01]  # Hybrid search with optional temporal filter
 cbi graph --sql "FROM GRAPH_TABLE(...)"                 # Raw SQL/PGQ queries
 cbi schema                                             # LLM-friendly schema readout with query examples
+cbi generate -o dist/                                  # Self-contained static site bundle
+cbi generate okf -o okf/ [--mode both|catalog|full] [--node-types ...] [--max-per-type N]  # OKF v0.1 markdown bundle
+cbi generate okf --skill --include-db                  # OKF bundle as a self-contained agent skill (SKILL.md + .duckdb + domain.yaml)
 ```
 
 ### Source Database Exploration (reads chi-city-data.duckdb directly)

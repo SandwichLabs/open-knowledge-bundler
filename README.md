@@ -127,7 +127,37 @@ cbi query   --text "search" --limit 10               # Hybrid search (BM25 + vec
 cbi query   --text "search" --date 2025-01-01        # Temporal filter
 cbi graph   --sql "FROM GRAPH_TABLE(...)"            # Raw SQL/PGQ queries
 cbi schema                                           # Schema readout with query examples
+cbi serve   --port 8080                              # HTTP API + D3 graph viewer
+cbi generate -o dist/                                # Self-contained static site bundle
+cbi generate okf -o okf/                             # Open Knowledge Format (OKF) markdown bundle
 ```
+
+### OKF export
+
+`cbi generate okf` exports the graph as an [Open Knowledge Format](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md)
+v0.1 bundle — a directory tree of markdown files with YAML frontmatter, readable
+by humans and agents with no tooling and diffable in git.
+
+```bash
+cbi generate okf -o okf/ --mode both          # catalog + one doc per node (default)
+cbi generate okf -o okf/ --mode catalog       # per-type / per-relationship schema only
+cbi generate okf -o okf/ --mode full          # one concept document per node
+cbi generate okf --node-types Business,Ward   # restrict to specific node types
+cbi generate okf --max-per-type 50            # cap per-node docs written per type
+cbi generate okf --skill --include-db         # self-contained agent skill (see below)
+```
+
+Layout: `index.md` (root listing, carries `okf_version`), `log.md`, `catalog/`
+(node-type and relationship-type concepts), and `<NodeType>/` directories of
+per-node concept documents with edges rendered as bundle-relative cross-links.
+
+**Agent skill bundle.** Add `--skill` to emit a `SKILL.md` so the bundle doubles
+as a self-describing [agent skill](https://docs.claude.com/en/docs/claude-code/skills),
+and `--include-db` to copy the DuckDB database and domain config alongside it.
+Combined, the result is fully self-contained: browsable OKF markdown for
+orientation plus a queryable database for precise hybrid retrieval. The generated
+`SKILL.md` documents the entity types, the `Nodes_Base`/`Edges_Base` schema, and
+ready-to-run DuckDB SQL + `cbi` query examples.
 
 ## Architecture
 
