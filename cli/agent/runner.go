@@ -32,8 +32,9 @@ func NewRunner(model fantasy.LanguageModel, systemPrompt string, tools []fantasy
 		fantasy.WithTools(tools...),
 		fantasy.WithTemperature(0.3),
 		fantasy.WithMaxOutputTokens(2048),
-		// Bound multi-step tool loops so a confused model can't spin forever.
-		fantasy.WithStopConditions(fantasy.StepCountIs(12)),
+		// Bound multi-step tool loops so a confused model can't spin forever,
+		// but allow enough retries to recover from a bad query.
+		fantasy.WithStopConditions(fantasy.StepCountIs(20)),
 	)
 	return &Runner{agent: a}
 }
@@ -111,7 +112,14 @@ func BuildSystemPrompt(b *Bundle, schema string, vectorOK bool) string {
 	p.WriteString("- list_docs / search_docs / read_doc: discover and read the markdown concept documents for narrative context and cross-links.\n\n")
 
 	p.WriteString("Guidance: prefer sql_query for anything precise; use hybrid_search or search_docs to find ids/concepts first when needed. ")
-	p.WriteString("Always ground answers in tool output and cite node ids. If a query errors, call schema, fix it, and retry. Keep answers concise and factual.\n\n")
+	p.WriteString("Always ground answers in tool output and cite node ids. If a query errors, call schema, fix it, and retry. Keep answers concise and factual.\n")
+	p.WriteString("Writing SQL: use the exact property keys and edge directions from the schema below (do not guess field names like 'name'). ")
+	p.WriteString("ALWAYS parenthesise JSON comparisons: `(properties->>'key') = 'value'` — the unparenthesised form raises a cast error. ")
+	p.WriteString("Prefer plain SQL joins on Edges_Base/Nodes_Base for relationships and multi-hop traversals (self-join Edges_Base for each hop). ")
+	p.WriteString("Do NOT use recursive CTEs or inline `{property: value}` filters with GRAPH_TABLE — duckpgq does not support them. ")
+	p.WriteString("After at most 2 failed query attempts, simplify to a basic Edges_Base/Nodes_Base join rather than retrying variations.\n")
+	p.WriteString("CRITICAL — never use your own background knowledge about the subject matter. Every fact in your answer must come from a tool result in THIS conversation. ")
+	p.WriteString("If the tools do not return the information, say you could not find it in the graph. Do not fill in, complete, or correct lists from memory. Always end with a plain-language answer grounded only in tool output.\n\n")
 
 	p.WriteString("## Current schema\n\n")
 	p.WriteString(schema)

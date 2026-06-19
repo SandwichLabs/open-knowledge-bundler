@@ -437,6 +437,16 @@ func (t *toolset) schemaText() (string, error) {
 	b.WriteString("## Node Types\n\n")
 	b.WriteString(nodeTypes)
 
+	// Property keys per node type — the model otherwise guesses field names.
+	propKeys, err := t.runQueryTable(`
+		SELECT node_type, json_keys(ANY_VALUE(properties)) AS property_keys
+		FROM Nodes_Base WHERE is_current = TRUE
+		GROUP BY node_type ORDER BY node_type`)
+	if err == nil {
+		b.WriteString("\n\n## Node Property Keys (use these exact keys in properties->>'...')\n\n")
+		b.WriteString(propKeys)
+	}
+
 	edgeTypes, err := t.runQueryTable(`
 		SELECT relationship_type, COUNT(*) AS count
 		FROM Edges_Base WHERE is_current = TRUE
@@ -461,9 +471,18 @@ func (t *toolset) schemaText() (string, error) {
 
 	b.WriteString("\n\n## Querying notes\n")
 	b.WriteString("- Filter `is_current = TRUE` for the current state.\n")
-	b.WriteString("- Extract JSON: `properties->>'key'` (text) or `properties->'key'` (typed).\n")
-	b.WriteString("- Graph traversal labels every node `\"node\"` and every edge `\"edge\"`:\n")
-	b.WriteString("  `FROM GRAPH_TABLE(domain_graph MATCH (a:\"node\")-[e:\"edge\"]->(b:\"node\") WHERE ... COLUMNS (...))`\n")
+	b.WriteString("- Extract JSON with the exact property keys above. ALWAYS wrap the extraction in parentheses when comparing: `(properties->>'key') = 'value'`. Without parentheses `->>` binds to the comparison and raises a cast error.\n")
+	b.WriteString("- Edges are directed: `Edges_Base.source_id` → `Edges_Base.target_id`, with the direction shown in Connectivity above (source_type → target_type). Match that direction.\n")
+	b.WriteString("- PREFER plain SQL joins on `Edges_Base`/`Nodes_Base` for relationships and traversals — it is the most reliable. Example, neighbours of a node by relationship:\n")
+	b.WriteString("  ```sql\n")
+	b.WriteString("  SELECT tgt.node_id, (tgt.properties->>'name') AS name\n")
+	b.WriteString("  FROM Edges_Base e\n")
+	b.WriteString("  JOIN Nodes_Base src ON e.source_id = src.node_id\n")
+	b.WriteString("  JOIN Nodes_Base tgt ON e.target_id = tgt.node_id\n")
+	b.WriteString("  WHERE e.is_current AND e.relationship_type = 'REL'\n")
+	b.WriteString("    AND (src.properties->>'KEY') = 'VALUE';\n")
+	b.WriteString("  ```\n")
+	b.WriteString("- Multi-hop: self-join `Edges_Base` again on the previous `target_id`. duckpgq `GRAPH_TABLE` does NOT support recursive CTEs or inline `{property: value}` match filters — do not use those; put all filters in a WHERE clause.\n")
 	return b.String(), nil
 }
 
