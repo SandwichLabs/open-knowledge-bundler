@@ -86,6 +86,11 @@ func (db *DB) RawQuery(query string) (*sql.Rows, error) {
 	return db.conn.Query(query)
 }
 
+// RawQueryArgs executes a parameterized SQL query and returns the result rows.
+func (db *DB) RawQueryArgs(query string, args ...any) (*sql.Rows, error) {
+	return db.conn.Query(query, args...)
+}
+
 // CreateIndexes creates the HNSW vector similarity index and spatial index.
 func (db *DB) CreateIndexes(embeddingDim int) error {
 	// Enable persistent HNSW indexes for on-disk databases.

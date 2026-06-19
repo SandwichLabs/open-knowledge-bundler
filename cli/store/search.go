@@ -86,6 +86,13 @@ func (db *DB) HybridSearch(text string, queryVec []float32, dateFilter *time.Tim
 	return scanResults(rows)
 }
 
+// ScanSearchRows scans rows whose columns are (node_id, node_type, properties,
+// semantic_text, rrf_score) into SearchResults. Exposed for callers that build
+// their own search queries (e.g. a lexical-only fallback).
+func ScanSearchRows(rows *sql.Rows) ([]SearchResult, error) {
+	return scanResults(rows)
+}
+
 func scanResults(rows *sql.Rows) ([]SearchResult, error) {
 	var results []SearchResult
 	for rows.Next() {

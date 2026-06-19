@@ -159,6 +159,32 @@ orientation plus a queryable database for precise hybrid retrieval. The generate
 `SKILL.md` documents the entity types, the `Nodes_Base`/`Edges_Base` schema, and
 ready-to-run DuckDB SQL + `cbi` query examples.
 
+### Local agent (`cbi agent`)
+
+Chat with a bundle using a **fully local, self-contained agent** — no API keys,
+no embedding server. Inference and embeddings run on-device via
+[kronk](https://github.com/ardanlabs/kronk) (llama.cpp); the agent loop, tools,
+and streaming are handled by [fantasy](https://github.com/charmbracelet/fantasy).
+
+```bash
+cbi agent --bundle ./okf-bundle                 # Bubble Tea chat TUI
+cbi agent --bundle ./okf-bundle --ask "how many incidents per year?"   # one-shot
+cbi agent --bundle ./okf-bundle --tier large --gpu vulkan              # bigger model / backend
+cbi agent --bundle ./okf-bundle --reconfigure   # re-pick the model size
+```
+
+The agent answers by calling tools over the bundle: `schema`, `sql_query`
+(read-only), `hybrid_search` (vector + lexical), and `list_docs` / `search_docs`
+/ `read_doc` for the markdown concepts. On first run you pick a model size
+(Gemma 4 family); the choice and all settings persist in
+`~/.config/cbi/config.yaml`. Models download once from Hugging Face. The default
+llama.cpp backend is **Vulkan** (override with `--gpu` or the `processor` config /
+`KRONK_PROCESSOR`). Embeddings (EmbeddingGemma, 768-dim) are pinned to the
+bundle's index; if they can't be loaded, `hybrid_search` degrades to lexical-only.
+
+Generate the bundle with `--include-db` (and, for document exploration,
+`--mode both` so per-node concept docs are written).
+
 ## Architecture
 
 ### Four DuckDB extensions, one database

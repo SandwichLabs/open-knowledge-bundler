@@ -28,7 +28,33 @@ cbi schema                                             # LLM-friendly schema rea
 cbi generate -o dist/                                  # Self-contained static site bundle
 cbi generate okf -o okf/ [--mode both|catalog|full] [--node-types ...] [--max-per-type N]  # OKF v0.1 markdown bundle
 cbi generate okf --skill --include-db                  # OKF bundle as a self-contained agent skill (SKILL.md + .duckdb + domain.yaml)
+cbi agent --bundle ./okf-bundle                        # Chat TUI over a bundle, fully local (kronk LLM + embeddings)
+cbi agent --bundle ./okf-bundle --ask "question"       # One-shot, non-interactive answer (no TUI)
+cbi agent --bundle ./okf-bundle --tier large --gpu vulkan  # Pick model size / llama.cpp backend
 ```
+
+### Local Agent (`cbi agent`)
+
+A self-contained, offline chat agent over an OKF bundle. Inference + embeddings
+run locally via [kronk](https://github.com/ardanlabs/kronk) (llama.cpp); the
+agent loop, tools, and streaming are handled by
+[fantasy](https://github.com/charmbracelet/fantasy). No API keys, no embedding
+server.
+
+- **Models** (Gemma 4 family) download once from Hugging Face. Size is chosen on
+  first run and persisted, with all settings, in `~/.config/cbi/config.yaml`
+  (`tier`, `models` map, `embed_source`, `processor`). Override per-invocation
+  with `--tier`/`--model`/`--gpu`; re-run the picker with `--reconfigure`.
+- **Backend**: defaults to **Vulkan** (`processor: vulkan`). Auto-detect prefers
+  ROCm when `rocminfo` is present, which is unreliable on AMD APUs; Vulkan is the
+  fast, reliable path on Strix Halo. Set `KRONK_PROCESSOR` or the `processor`
+  config / `--gpu` flag to override (cpu|cuda|rocm|vulkan).
+- **Embeddings** are pinned to the bundle's index dimension (EmbeddingGemma,
+  768-dim, Matryoshka-reduced). If the embedding model can't be loaded/matched,
+  hybrid search degrades to lexical-only (shown in the status bar).
+- **Tools** the agent can call: `schema`, `sql_query` (read-only guard),
+  `hybrid_search` (vector+lexical, or lexical-only fallback), `list_docs`,
+  `search_docs`, `read_doc`. Code lives in `cli/agent/`.
 
 ### Source Database Exploration (reads chi-city-data.duckdb directly)
 
