@@ -19,12 +19,23 @@ type toolset struct {
 }
 
 const (
-	maxSQLRows  = 50    // row cap for sql_query output
-	maxCellLen  = 200   // per-cell character cap
-	maxDocList  = 200   // entries returned by list_docs
-	maxDocHits  = 40    // results returned by search_docs
-	maxDocBytes = 60000 // read_doc size cap
+	maxSQLRows    = 50   // row cap for sql_query output
+	maxCellLen    = 200  // per-cell character cap
+	maxDocList    = 200  // entries returned by list_docs
+	maxDocHits    = 40   // results returned by search_docs
+	maxDocBytes   = 8000 // read_doc size cap
+	maxToolOutput = 8000 // cap on each tool's output text fed back into the model context
 )
+
+// capText bounds a tool's output so a single result can't flood the model's
+// context window across a multi-step tool loop (which otherwise overflows and
+// yields blank answers on complex questions).
+func capText(s string) string {
+	if len(s) > maxToolOutput {
+		return s[:maxToolOutput] + "\n…(output truncated to fit the model context)"
+	}
+	return s
+}
 
 // Tools returns the fantasy tools the agent can call against the bundle.
 func (t *toolset) Tools() []fantasy.AgentTool {
@@ -57,7 +68,7 @@ func (t *toolset) sqlQueryTool() fantasy.AgentTool {
 			if err != nil {
 				return fantasy.NewTextErrorResponse(fmt.Sprintf("query failed: %v", err)), nil
 			}
-			return fantasy.NewTextResponse(table), nil
+			return fantasy.NewTextResponse(capText(table)), nil
 		},
 	)
 }
@@ -108,7 +119,7 @@ func (t *toolset) hybridSearchTool() fantasy.AgentTool {
 			if err != nil {
 				return fantasy.NewTextErrorResponse(fmt.Sprintf("search failed: %v", err)), nil
 			}
-			return fantasy.NewTextResponse(formatSearchResults(results)), nil
+			return fantasy.NewTextResponse(capText(formatSearchResults(results))), nil
 		},
 	)
 }
@@ -125,7 +136,7 @@ func (t *toolset) schemaTool() fantasy.AgentTool {
 			if err != nil {
 				return fantasy.NewTextErrorResponse(fmt.Sprintf("schema failed: %v", err)), nil
 			}
-			return fantasy.NewTextResponse(out), nil
+			return fantasy.NewTextResponse(capText(out)), nil
 		},
 	)
 }
@@ -149,7 +160,7 @@ func (t *toolset) readDocTool() fantasy.AgentTool {
 			if len(content) > maxDocBytes {
 				content = content[:maxDocBytes] + "\n\n…(truncated)"
 			}
-			return fantasy.NewTextResponse(content), nil
+			return fantasy.NewTextResponse(capText(content)), nil
 		},
 	)
 }

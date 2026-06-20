@@ -5,6 +5,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] — 2026-06-19
 
+### Fixed — agent context-window overflow on multi-step questions
+
+Complex questions that needed many tool calls could overflow the model's context
+("context window is full") and return a blank answer. Two fixes: the LLM is now
+loaded with a **32k context window** (kronk defaults to 8k, which a long tool loop
+plus the schema-bearing system prompt overruns), and **each tool's output is
+capped** (`maxToolOutput`, and `read_doc` 60k→8k) so a single large result can't
+flood the context. On the medical GraphRAG-Bench sample this turned 5/5
+previously-blank questions (up to 9 tool calls each) into real answers.
+
 ### Added — GraphRAG-Bench harness (`benchmarks/graphrag-bench/`)
 
 Scripts to run `cbi` against the

@@ -7,7 +7,15 @@ import (
 
 	"charm.land/fantasy"
 	kronkprov "charm.land/fantasy/providers/kronk"
+	"github.com/ardanlabs/kronk/sdk/kronk/model"
 )
+
+// contextWindow is the token context the LLM is loaded with. kronk defaults to
+// 8192, which a multi-step tool conversation (system prompt + accumulating tool
+// results) overflows on complex questions — producing "context window is full"
+// errors and blank answers. Gemma 4 supports far more; 32k gives ample room for
+// the agent loop while staying modest on KV-cache memory.
+const contextWindow = 32768
 
 // NewProvider creates the kronk LLM provider. Download/install progress is
 // printed via the provider logger (so do this before the TUI starts). Pass nil
@@ -16,9 +24,14 @@ func NewProvider(logger kronkprov.Logger) (fantasy.Provider, error) {
 	if logger == nil {
 		logger = kronkprov.FmtLogger
 	}
+	// Enlarge the context window; other Config fields stay nil so kronk applies
+	// its defaults for them.
+	var cfg model.Config
+	model.WithContextWindow(contextWindow)(&cfg)
 	return kronkprov.New(
 		kronkprov.WithName("cbi"),
 		kronkprov.WithLogger(logger),
+		kronkprov.WithModelConfig(cfg),
 	)
 }
 
