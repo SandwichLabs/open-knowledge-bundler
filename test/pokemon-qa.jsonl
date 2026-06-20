@@ -1,0 +1,83 @@
+{"id": "types-forward-0", "question": "What type or types is Blastoise?", "gold": ["Water"], "tags": {"mode": "types", "dir": "forward"}}
+{"id": "types-forward-1", "question": "What type or types is Bulbasaur?", "gold": ["Grass", "Poison"], "tags": {"mode": "types", "dir": "forward"}}
+{"id": "types-forward-2", "question": "What type or types is Charizard?", "gold": ["Fire", "Flying"], "tags": {"mode": "types", "dir": "forward"}}
+{"id": "types-forward-3", "question": "What type or types is Charmander?", "gold": ["Fire"], "tags": {"mode": "types", "dir": "forward"}}
+{"id": "types-forward-4", "question": "What type or types is Charmeleon?", "gold": ["Fire"], "tags": {"mode": "types", "dir": "forward"}}
+{"id": "types-forward-5", "question": "What type or types is Chikorita?", "gold": ["Grass"], "tags": {"mode": "types", "dir": "forward"}}
+{"id": "types-forward-6", "question": "What type or types is Cyndaquil?", "gold": ["Fire"], "tags": {"mode": "types", "dir": "forward"}}
+{"id": "types-forward-7", "question": "What type or types is Eevee?", "gold": ["Normal"], "tags": {"mode": "types", "dir": "forward"}}
+{"id": "types-forward-8", "question": "What type or types is Flareon?", "gold": ["Fire"], "tags": {"mode": "types", "dir": "forward"}}
+{"id": "types-forward-9", "question": "What type or types is Ivysaur?", "gold": ["Grass", "Poison"], "tags": {"mode": "types", "dir": "forward"}}
+{"id": "types-forward-10", "question": "What type or types is Jolteon?", "gold": ["Electric"], "tags": {"mode": "types", "dir": "forward"}}
+{"id": "types-forward-11", "question": "What type or types is Mew?", "gold": ["Psychic"], "tags": {"mode": "types", "dir": "forward"}}
+{"id": "types-forward-12", "question": "What type or types is Mewtwo?", "gold": ["Psychic"], "tags": {"mode": "types", "dir": "forward"}}
+{"id": "types-forward-13", "question": "What type or types is Pikachu?", "gold": ["Electric"], "tags": {"mode": "types", "dir": "forward"}}
+{"id": "types-forward-14", "question": "What type or types is Raichu?", "gold": ["Electric"], "tags": {"mode": "types", "dir": "forward"}}
+{"id": "types-forward-15", "question": "What type or types is Squirtle?", "gold": ["Water"], "tags": {"mode": "types", "dir": "forward"}}
+{"id": "types-forward-16", "question": "What type or types is Totodile?", "gold": ["Water"], "tags": {"mode": "types", "dir": "forward"}}
+{"id": "types-forward-17", "question": "What type or types is Vaporeon?", "gold": ["Water"], "tags": {"mode": "types", "dir": "forward"}}
+{"id": "types-forward-18", "question": "What type or types is Venusaur?", "gold": ["Grass", "Poison"], "tags": {"mode": "types", "dir": "forward"}}
+{"id": "types-forward-19", "question": "What type or types is Wartortle?", "gold": ["Water"], "tags": {"mode": "types", "dir": "forward"}}
+{"id": "region-forward-20", "question": "In which region is Blastoise found?", "gold": ["Kanto"], "tags": {"mode": "region", "dir": "forward"}}
+{"id": "region-forward-21", "question": "In which region is Bulbasaur found?", "gold": ["Kanto"], "tags": {"mode": "region", "dir": "forward"}}
+{"id": "region-forward-22", "question": "In which region is Charizard found?", "gold": ["Kanto"], "tags": {"mode": "region", "dir": "forward"}}
+{"id": "region-forward-23", "question": "In which region is Charmander found?", "gold": ["Kanto"], "tags": {"mode": "region", "dir": "forward"}}
+{"id": "region-forward-24", "question": "In which region is Charmeleon found?", "gold": ["Kanto"], "tags": {"mode": "region", "dir": "forward"}}
+{"id": "region-forward-25", "question": "In which region is Chikorita found?", "gold": ["Johto"], "tags": {"mode": "region", "dir": "forward"}}
+{"id": "region-forward-26", "question": "In which region is Cyndaquil found?", "gold": ["Johto"], "tags": {"mode": "region", "dir": "forward"}}
+{"id": "region-forward-27", "question": "In which region is Eevee found?", "gold": ["Hokkaido", "Kanto"], "tags": {"mode": "region", "dir": "forward"}}
+{"id": "region-forward-28", "question": "In which region is Flareon found?", "gold": ["Kanto"], "tags": {"mode": "region", "dir": "forward"}}
+{"id": "region-forward-29", "question": "In which region is Ivysaur found?", "gold": ["Kanto"], "tags": {"mode": "region", "dir": "forward"}}
+{"id": "region-forward-30", "question": "In which region is Jolteon found?", "gold": ["Kanto"], "tags": {"mode": "region", "dir": "forward"}}
+{"id": "region-forward-31", "question": "In which region is Mew found?", "gold": ["Kanto"], "tags": {"mode": "region", "dir": "forward"}}
+{"id": "region-forward-32", "question": "In which region is Mewtwo found?", "gold": ["Kanto"], "tags": {"mode": "region", "dir": "forward"}}
+{"id": "region-forward-33", "question": "In which region is Pikachu found?", "gold": ["Kanto"], "tags": {"mode": "region", "dir": "forward"}}
+{"id": "region-forward-34", "question": "In which region is Raichu found?", "gold": ["Kanto"], "tags": {"mode": "region", "dir": "forward"}}
+{"id": "region-forward-35", "question": "In which region is Squirtle found?", "gold": ["Kanto"], "tags": {"mode": "region", "dir": "forward"}}
+{"id": "region-forward-36", "question": "In which region is Totodile found?", "gold": ["Johto"], "tags": {"mode": "region", "dir": "forward"}}
+{"id": "region-forward-37", "question": "In which region is Vaporeon found?", "gold": ["Kanto"], "tags": {"mode": "region", "dir": "forward"}}
+{"id": "region-forward-38", "question": "In which region is Venusaur found?", "gold": ["Kanto"], "tags": {"mode": "region", "dir": "forward"}}
+{"id": "region-forward-39", "question": "In which region is Wartortle found?", "gold": ["Kanto"], "tags": {"mode": "region", "dir": "forward"}}
+{"id": "owner-forward-40", "question": "Which trainer owns Blastoise?", "gold": ["Gary Oak", "Misty"], "tags": {"mode": "owner", "dir": "forward"}}
+{"id": "owner-forward-41", "question": "Which trainer owns Bulbasaur?", "gold": ["Ash Ketchum"], "tags": {"mode": "owner", "dir": "forward"}}
+{"id": "owner-forward-42", "question": "Which trainer owns Charmander?", "gold": ["Ash Ketchum"], "tags": {"mode": "owner", "dir": "forward"}}
+{"id": "owner-forward-43", "question": "Which trainer owns Eevee?", "gold": ["Gary Oak"], "tags": {"mode": "owner", "dir": "forward"}}
+{"id": "owner-forward-44", "question": "Which trainer owns Mewtwo?", "gold": ["Giovanni"], "tags": {"mode": "owner", "dir": "forward"}}
+{"id": "owner-forward-45", "question": "Which trainer owns Pikachu?", "gold": ["Ash Ketchum"], "tags": {"mode": "owner", "dir": "forward"}}
+{"id": "owner-forward-46", "question": "Which trainer owns Raichu?", "gold": ["Giovanni"], "tags": {"mode": "owner", "dir": "forward"}}
+{"id": "owner-forward-47", "question": "Which trainer owns Squirtle?", "gold": ["Ash Ketchum", "Misty"], "tags": {"mode": "owner", "dir": "forward"}}
+{"id": "owner-forward-48", "question": "Which trainer owns Vaporeon?", "gold": ["Misty"], "tags": {"mode": "owner", "dir": "forward"}}
+{"id": "evolve-forward-49", "question": "What does Bulbasaur evolve into?", "gold": ["Ivysaur"], "tags": {"mode": "evolve", "dir": "forward"}}
+{"id": "evolve-forward-50", "question": "What does Ivysaur evolve into?", "gold": ["Venusaur"], "tags": {"mode": "evolve", "dir": "forward"}}
+{"id": "evolve-forward-51", "question": "What does Charmander evolve into?", "gold": ["Charmeleon"], "tags": {"mode": "evolve", "dir": "forward"}}
+{"id": "evolve-forward-52", "question": "What does Charmeleon evolve into?", "gold": ["Charizard"], "tags": {"mode": "evolve", "dir": "forward"}}
+{"id": "evolve-forward-53", "question": "What does Squirtle evolve into?", "gold": ["Wartortle"], "tags": {"mode": "evolve", "dir": "forward"}}
+{"id": "evolve-forward-54", "question": "What does Wartortle evolve into?", "gold": ["Blastoise"], "tags": {"mode": "evolve", "dir": "forward"}}
+{"id": "evolve-forward-55", "question": "What does Pikachu evolve into?", "gold": ["Raichu"], "tags": {"mode": "evolve", "dir": "forward"}}
+{"id": "evolve-forward-56", "question": "What does Eevee evolve into?", "gold": ["Vaporeon"], "tags": {"mode": "evolve", "dir": "forward"}}
+{"id": "evolve-forward-57", "question": "What does Eevee evolve into?", "gold": ["Jolteon"], "tags": {"mode": "evolve", "dir": "forward"}}
+{"id": "evolve-forward-58", "question": "What does Eevee evolve into?", "gold": ["Flareon"], "tags": {"mode": "evolve", "dir": "forward"}}
+{"id": "by_type-reverse-59", "question": "Which Pokemon are Electric type?", "gold": ["Jolteon", "Pikachu", "Raichu"], "tags": {"mode": "by_type", "dir": "reverse"}}
+{"id": "by_type-reverse-60", "question": "Which Pokemon are Fire type?", "gold": ["Charizard", "Charmander", "Charmeleon", "Cyndaquil", "Flareon"], "tags": {"mode": "by_type", "dir": "reverse"}}
+{"id": "by_type-reverse-61", "question": "Which Pokemon are Flying type?", "gold": ["Charizard"], "tags": {"mode": "by_type", "dir": "reverse"}}
+{"id": "by_type-reverse-62", "question": "Which Pokemon are Grass type?", "gold": ["Bulbasaur", "Chikorita", "Ivysaur", "Venusaur"], "tags": {"mode": "by_type", "dir": "reverse"}}
+{"id": "by_type-reverse-63", "question": "Which Pokemon are Normal type?", "gold": ["Eevee"], "tags": {"mode": "by_type", "dir": "reverse"}}
+{"id": "by_type-reverse-64", "question": "Which Pokemon are Poison type?", "gold": ["Bulbasaur", "Ivysaur", "Venusaur"], "tags": {"mode": "by_type", "dir": "reverse"}}
+{"id": "by_type-reverse-65", "question": "Which Pokemon are Psychic type?", "gold": ["Mew", "Mewtwo"], "tags": {"mode": "by_type", "dir": "reverse"}}
+{"id": "by_type-reverse-66", "question": "Which Pokemon are Water type?", "gold": ["Blastoise", "Squirtle", "Totodile", "Vaporeon", "Wartortle"], "tags": {"mode": "by_type", "dir": "reverse"}}
+{"id": "by_region-reverse-67", "question": "Which Pokemon are found in the Hokkaido region?", "gold": ["Eevee"], "tags": {"mode": "by_region", "dir": "reverse"}}
+{"id": "by_region-reverse-68", "question": "Which Pokemon are found in the Johto region?", "gold": ["Chikorita", "Cyndaquil", "Totodile"], "tags": {"mode": "by_region", "dir": "reverse"}}
+{"id": "by_region-reverse-69", "question": "Which Pokemon are found in the Kanto region?", "gold": ["Blastoise", "Bulbasaur", "Charizard", "Charmander", "Charmeleon", "Eevee", "Flareon", "Ivysaur", "Jolteon", "Mew", "Mewtwo", "Pikachu", "Raichu", "Squirtle", "Vaporeon", "Venusaur", "Wartortle"], "tags": {"mode": "by_region", "dir": "reverse"}}
+{"id": "by_trainer-reverse-70", "question": "Which Pokemon does Ash Ketchum own?", "gold": ["Bulbasaur", "Charmander", "Pikachu", "Squirtle"], "tags": {"mode": "by_trainer", "dir": "reverse"}}
+{"id": "by_trainer-reverse-71", "question": "Which Pokemon does Gary Oak own?", "gold": ["Blastoise", "Eevee"], "tags": {"mode": "by_trainer", "dir": "reverse"}}
+{"id": "by_trainer-reverse-72", "question": "Which Pokemon does Giovanni own?", "gold": ["Mewtwo", "Raichu"], "tags": {"mode": "by_trainer", "dir": "reverse"}}
+{"id": "by_trainer-reverse-73", "question": "Which Pokemon does Misty own?", "gold": ["Blastoise", "Squirtle", "Vaporeon"], "tags": {"mode": "by_trainer", "dir": "reverse"}}
+{"id": "evo_line-multihop-74", "question": "What is the full evolution line starting from Bulbasaur?", "gold": ["Bulbasaur", "Ivysaur", "Venusaur"], "tags": {"mode": "evo_line", "dir": "multihop"}}
+{"id": "evo_line-multihop-75", "question": "What is the full evolution line starting from Charmander?", "gold": ["Charizard", "Charmander", "Charmeleon"], "tags": {"mode": "evo_line", "dir": "multihop"}}
+{"id": "evo_line-multihop-76", "question": "What is the full evolution line starting from Eevee?", "gold": ["Eevee", "Flareon"], "tags": {"mode": "evo_line", "dir": "multihop"}}
+{"id": "evo_line-multihop-77", "question": "What is the full evolution line starting from Pikachu?", "gold": ["Pikachu", "Raichu"], "tags": {"mode": "evo_line", "dir": "multihop"}}
+{"id": "evo_line-multihop-78", "question": "What is the full evolution line starting from Squirtle?", "gold": ["Blastoise", "Squirtle", "Wartortle"], "tags": {"mode": "evo_line", "dir": "multihop"}}
+{"id": "count-aggregation-79", "question": "How many nodes of type Pokemon are in the graph?", "gold": ["20"], "tags": {"mode": "count", "dir": "aggregation"}}
+{"id": "count-aggregation-80", "question": "How many nodes of type Region are in the graph?", "gold": ["3"], "tags": {"mode": "count", "dir": "aggregation"}}
+{"id": "count-aggregation-81", "question": "How many nodes of type Trainer are in the graph?", "gold": ["5"], "tags": {"mode": "count", "dir": "aggregation"}}
+{"id": "count-aggregation-82", "question": "How many nodes of type Type are in the graph?", "gold": ["8"], "tags": {"mode": "count", "dir": "aggregation"}}
