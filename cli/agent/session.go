@@ -183,11 +183,12 @@ type AskUsage struct {
 	TotalTokens  int64 `json:"total_tokens"`
 }
 
-// RunOnceJSON answers a single prompt and writes one JSON object (an AskResult)
-// to stdout. Nothing else goes to stdout, so the output is safe to pipe into a
-// grader. Errors are reported inside the JSON (and returned) rather than printed
-// loose. The model/llmSource label is passed in by the caller.
-func (s *Session) RunOnceJSON(ctx context.Context, prompt, model string) error {
+// Answer runs a single prompt in-process and returns the structured result
+// (final answer, tool-call trace, steps, token usage, timing). It does not
+// print anything, so an eval harness can load the session once and loop over
+// many questions without reloading the model. Any agent error is captured in
+// AskResult.Error and also returned.
+func (s *Session) Answer(ctx context.Context, prompt, model string) (AskResult, error) {
 	tctx, cancel := context.WithTimeout(ctx, turnTimeout)
 	defer cancel()
 
@@ -219,6 +220,19 @@ func (s *Session) RunOnceJSON(ctx context.Context, prompt, model string) error {
 			TotalTokens:  res.TotalUsage.TotalTokens,
 		}
 	}
+	return out, err
+}
+
+// ResetHistory clears the conversation history so the next Answer/Stream starts
+// a fresh turn. The eval driver calls this between independent questions.
+func (s *Session) ResetHistory() { s.runner.history = nil }
+
+// RunOnceJSON answers a single prompt and writes one JSON object (an AskResult)
+// to stdout. Nothing else goes to stdout, so the output is safe to pipe into a
+// grader. Errors are reported inside the JSON (and returned) rather than printed
+// loose. The model/llmSource label is passed in by the caller.
+func (s *Session) RunOnceJSON(ctx context.Context, prompt, model string) error {
+	out, err := s.Answer(ctx, prompt, model)
 
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetEscapeHTML(false)

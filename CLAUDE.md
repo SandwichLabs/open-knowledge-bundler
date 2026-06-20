@@ -32,7 +32,30 @@ cbi agent --bundle ./okf-bundle                        # Chat TUI over a bundle,
 cbi agent --bundle ./okf-bundle --ask "question"       # One-shot, non-interactive answer (no TUI)
 cbi agent --bundle ./okf-bundle --ask "question" --json # One-shot structured result (answer + tool trace + tokens + timing) on stdout — for eval harnesses
 cbi agent --bundle ./okf-bundle --tier large --gpu vulkan  # Pick model size / llama.cpp backend
+cbi eval --bundle ./okf-bundle --questions q.jsonl --vocab vocab.txt --by hop  # Benchmark the agent against a known-answer set
+cbi convert metaqa --src ./MetaQA --out ./metaqa-cbi --sample 100  # Convert MetaQA → cbi domain + eval question set
 ```
+
+### Benchmarking (`cbi eval`)
+
+`cbi eval` runs the local agent over a `questions.jsonl` answer key (one
+`{"question","gold":[...],"tags":{...}}` per line) and scores answers
+deterministically — `recall`, `exact` (Hits@all), and `precision`/`F1` when an
+entity-name `--vocab` is supplied (precision catches over-generation/hallucination
+with no LLM judge). Honest "not found" misses are counted separately from
+confident wrong answers. The model loads once per tier (in-process via the agent
+session's `Answer()`), so it is far faster than `--ask` per question. Sweep model
+sizes with repeated `--tier`; break the leaderboard down with `--by <tag>`; write
+per-question results with `--out`. Code: `cli/eval/` (scoring) + `cli/cmd/eval.go`.
+
+### Dataset conversion (`cbi convert metaqa`)
+
+Converts a local [MetaQA](https://github.com/yuyuz/MetaQA) checkout (download from
+the Google Drive linked in its README) into the cbi ingest format + an eval set.
+After converting: `cbi init` → `cbi ingest --nodes nodes.ndjson --edges
+edges.ndjson` → `cbi generate okf --include-db` → `cbi eval`. Code: `cli/metaqa/`
++ `cli/cmd/convert_metaqa.go`. Ingest needs a 768-dim embedding endpoint (see the
+embedding-server note); `cbi eval` then runs fully local via kronk.
 
 ### Local Agent (`cbi agent`)
 

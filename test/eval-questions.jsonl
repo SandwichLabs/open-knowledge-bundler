@@ -1,0 +1,7 @@
+# Pokemon-domain eval set — gold answers verified against pokemon.duckdb.
+{"id":"count","question":"What node types exist and how many nodes of each?","gold":["20","8","5","3"],"tags":{"mode":"aggregation"}}
+{"id":"charmander-line","question":"What is the full evolution line starting from Charmander?","gold":["Charmander","Charmeleon","Charizard"],"tags":{"mode":"multi-hop"}}
+{"id":"ash-owns","question":"Which Pokemon does Ash Ketchum own?","gold":["Squirtle","Charmander","Bulbasaur","Pikachu"],"tags":{"mode":"relationship"}}
+{"id":"dragon-flames","question":"Find the Pokemon described as a dragon that breathes flames hot enough to melt boulders.","gold":["Charizard"],"tags":{"mode":"semantic"}}
+{"id":"charizard-types","question":"What types is Charizard, and what region is it from?","gold":["Fire","Flying","Kanto"],"tags":{"mode":"graph"}}
+{"id":"eevee-evos","question":"List all of Eevee's evolutions.","gold":["Vaporeon","Jolteon","Flareon"],"tags":{"mode":"fan-out"}}

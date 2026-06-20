@@ -5,6 +5,40 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] — 2026-06-19
 
+### Added — `cbi eval`: benchmark the agent against a known-answer set
+
+`cbi eval --bundle <dir> --questions q.jsonl` runs the local agent over a
+`questions.jsonl` answer key and scores its answers **deterministically** (no LLM
+judge). The model loads once per tier and answers every question in-process — far
+faster than spawning `cbi agent --ask` per question.
+
+- **Metrics** (new `cli/eval` package): `recall` (gold coverage), `exact`
+  (Hits@all — every gold item present), and, when an entity-name `--vocab` is
+  available, `precision`/`F1`. Precision counts known entities the answer named
+  that are *not* in the gold set — which catches over-generation (the
+  hallucination mode) automatically, no judge needed. Entities named in the
+  question itself (the topic/subject) are excluded so restating them isn't
+  miscounted as over-generation.
+- **Honest miss vs confident wrong** are tallied separately: an answer that
+  disclaims ("not found in the graph") is a categorically better failure than a
+  fabricated one, so the leaderboard tracks them apart.
+- **Sweep + breakdown:** pass `--tier` more than once to compare model sizes;
+  `--by <tag>` breaks the leaderboard down by a question tag (e.g. `hop`).
+  `--out` writes per-question results (answer + tool-call trace + score) as JSONL.
+- Built on the `--ask --json` primitive: reuses the agent session's new
+  in-process `Answer()` method and `ResetHistory()` between independent questions.
+
+### Added — `cbi convert metaqa`: MetaQA → cbi domain + eval set
+
+`cbi convert metaqa --src <MetaQA dir> --out <dir>` converts a local copy of
+[MetaQA](https://github.com/yuyuz/MetaQA) (the WikiMovies knowledge base + the
+1/2/3-hop QA sets) into a ready-to-ingest bundle plus a matching answer key:
+`nodes.ndjson`, `edges.ndjson`, `domain.yaml`, `vocab.txt` (for `cbi eval
+--vocab`), and a sampled `questions.jsonl` tagged by hop. Node types
+(Movie/Person/Year/Genre/…) are inferred from the relation (every kb triple has a
+movie subject); `--sample N` caps questions per hop, `--hops`/`--split`/`--seed`
+control selection. New `cli/metaqa` package holds the parsing/typing logic.
+
 ### Added — `cbi agent`: self-contained local LLM chat over OKF bundles
 
 A new `cbi agent --bundle <dir>` command opens an interactive chat TUI (or a
