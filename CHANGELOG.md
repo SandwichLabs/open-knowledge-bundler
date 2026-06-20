@@ -5,6 +5,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] — 2026-06-19
 
+### Added — GraphRAG-Bench harness (`benchmarks/graphrag-bench/`)
+
+Scripts to run `cbi` against the
+[GraphRAG-Bench](https://github.com/GraphRAG-Bench/GraphRAG-Benchmark) generation
+benchmark with **graph construction and judging both done by a local LLM** (no API
+keys): `extract_graph.py` (LLM entity/relation extraction over a document corpus →
+cbi NDJSON), `prep_questions.py` (scope questions to graph-covered entities,
+stratified by type), `to_grbench.py` (cbi answers → GraphRAG-Bench results schema),
+and `run_judge.sh` (their `generation_eval` pointed at a local OpenAI-compatible
+judge + local BGE embeddings). See the directory README for the full pipeline.
+
 ### Added — `cbi answer` + tool-result capture (external-benchmark prep)
 
 - **`cbi answer --bundle <dir> --questions q.jsonl`** batch-answers a question set
