@@ -52,8 +52,10 @@ func NewRunner(model fantasy.LanguageModel, systemPrompt string, tools []fantasy
 		fantasy.WithTemperature(0.3),
 		fantasy.WithMaxOutputTokens(2048),
 		// Bound multi-step tool loops so a confused model can't spin forever,
-		// but allow enough retries to recover from a bad query.
-		fantasy.WithStopConditions(fantasy.StepCountIs(20)),
+		// but allow enough steps for a thorough model to finish: the 12B issues
+		// ~9 tool calls on complex questions and was hitting a 20-step cap before
+		// emitting its final answer (blank results).
+		fantasy.WithStopConditions(fantasy.StepCountIs(32)),
 	)
 	return &Runner{agent: a}
 }
