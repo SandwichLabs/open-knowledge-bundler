@@ -159,7 +159,7 @@ func (m *tuiModel) submit(prompt string) tea.Cmd {
 			OnText:       func(t string) { m.sub <- streamTextMsg(t) },
 			OnReasoning:  func(t string) { m.sub <- streamReasoningMsg(t) },
 			OnToolCall:   func(n, in string) { m.sub <- streamToolMsg{n, in} },
-			OnToolResult: func(n string) { m.sub <- streamToolResultMsg{n} },
+			OnToolResult: func(n, _ string) { m.sub <- streamToolResultMsg{n} },
 			OnDone:       func(err error) { m.sub <- streamDoneMsg{err} },
 		})
 	}()

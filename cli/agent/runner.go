@@ -48,7 +48,7 @@ type StreamHandler struct {
 	OnText       func(text string)
 	OnReasoning  func(text string)
 	OnToolCall   func(name, input string)
-	OnToolResult func(name string)
+	OnToolResult func(name, output string)
 	OnDone       func(err error)
 }
 
@@ -80,7 +80,11 @@ func (r *Runner) Stream(ctx context.Context, prompt string, h StreamHandler) (*f
 		},
 		OnToolResult: func(tr fantasy.ToolResultContent) error {
 			if h.OnToolResult != nil {
-				h.OnToolResult(tr.ToolName)
+				out := ""
+				if txt, ok := fantasy.AsToolResultOutputType[fantasy.ToolResultOutputContentText](tr.Result); ok {
+					out = txt.Text
+				}
+				h.OnToolResult(tr.ToolName, out)
 			}
 			return nil
 		},

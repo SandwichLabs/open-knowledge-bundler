@@ -145,7 +145,7 @@ func (s *Session) RunOnce(ctx context.Context, prompt string) error {
 	s.runner.Stream(tctx, prompt, StreamHandler{
 		OnText:       func(t string) { fmt.Print(t) },
 		OnToolCall:   func(n, in string) { fmt.Fprintf(os.Stderr, "\n[tool: %s %s]\n", n, oneLine(in, 200)) },
-		OnToolResult: func(n string) { fmt.Fprintf(os.Stderr, "[tool: %s done]\n", n) },
+		OnToolResult: func(n, _ string) { fmt.Fprintf(os.Stderr, "[tool: %s done]\n", n) },
 		OnDone:       func(err error) { runErr = err },
 	})
 	fmt.Println()
@@ -157,10 +157,11 @@ func (s *Session) RunOnce(ctx context.Context, prompt string) error {
 // token/timing metrics so an external eval harness can grade without scraping
 // streamed prose.
 type AskResult struct {
-	Question   string         `json:"question"`
-	Answer     string         `json:"answer"`
-	ToolCalls  []AskToolCall  `json:"tool_calls"`
-	Steps      int            `json:"steps"`
+	Question    string          `json:"question"`
+	Answer      string          `json:"answer"`
+	ToolCalls   []AskToolCall   `json:"tool_calls"`
+	ToolResults []AskToolResult `json:"tool_results,omitempty"`
+	Steps       int             `json:"steps"`
 	Usage      AskUsage       `json:"usage"`
 	DurationMS int64          `json:"duration_ms"`
 	VectorOK   bool           `json:"vector_ok"`
@@ -174,6 +175,14 @@ type AskResult struct {
 type AskToolCall struct {
 	Name  string `json:"name"`
 	Input string `json:"input"`
+}
+
+// AskToolResult records one tool's output text, in result order. This is the
+// retrieved context an external eval (e.g. GraphRAG-Bench) needs to score
+// retrieval/faithfulness. Only emitted when result capture is enabled.
+type AskToolResult struct {
+	Name   string `json:"name"`
+	Output string `json:"output"`
 }
 
 // AskUsage is the token accounting for a turn.
@@ -204,6 +213,9 @@ func (s *Session) Answer(ctx context.Context, prompt, model string) (AskResult, 
 	res, err := s.runner.Stream(tctx, prompt, StreamHandler{
 		OnToolCall: func(n, in string) {
 			out.ToolCalls = append(out.ToolCalls, AskToolCall{Name: n, Input: in})
+		},
+		OnToolResult: func(n, output string) {
+			out.ToolResults = append(out.ToolResults, AskToolResult{Name: n, Output: output})
 		},
 	})
 	out.DurationMS = time.Since(start).Milliseconds()

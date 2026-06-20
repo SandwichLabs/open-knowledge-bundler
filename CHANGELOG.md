@@ -5,6 +5,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] — 2026-06-19
 
+### Added — `cbi answer` + tool-result capture (external-benchmark prep)
+
+- **`cbi answer --bundle <dir> --questions q.jsonl`** batch-answers a question set
+  with the local agent (model loads once, in-process) and emits, per question, the
+  `generated_answer` plus the **retrieved `context`** (concatenated tool outputs)
+  and run metadata, as a JSON array. Unlike `cbi eval` it does not score — it
+  produces raw answers + context for an external judge (e.g. GraphRAG-Bench).
+- **Tool-result capture:** `--ask --json` (via `Session.Answer`) now records
+  `tool_results` (each tool's output text), not just the tool calls. The streaming
+  `StreamHandler.OnToolResult` callback gained an `output` argument. This is what
+  feeds the `context` field external retrieval/faithfulness metrics need.
+
 ### Added — `cbi eval`: benchmark the agent against a known-answer set
 
 `cbi eval --bundle <dir> --questions q.jsonl` runs the local agent over a
