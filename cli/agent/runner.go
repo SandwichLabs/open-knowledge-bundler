@@ -13,9 +13,11 @@ import (
 // contextWindow is the token context the LLM is loaded with. kronk defaults to
 // 8192, which a multi-step tool conversation (system prompt + accumulating tool
 // results) overflows on complex questions — producing "context window is full"
-// errors and blank answers. Gemma 4 supports far more; 32k gives ample room for
-// the agent loop while staying modest on KV-cache memory.
-const contextWindow = 32768
+// errors and blank answers. Gemma 4 supports far more natively (E2B/E4B: 128k;
+// 12B/31B/26B-A4B: 256k), so we load 128k — enough headroom that long tool loops
+// with generous per-tool output never overflow on a host that can hold the KV
+// cache (e.g. Strix Halo's large unified memory).
+const contextWindow = 131072
 
 // NewProvider creates the kronk LLM provider. Download/install progress is
 // printed via the provider logger (so do this before the TUI starts). Pass nil

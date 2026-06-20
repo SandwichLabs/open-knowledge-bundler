@@ -19,17 +19,18 @@ type toolset struct {
 }
 
 const (
-	maxSQLRows    = 50   // row cap for sql_query output
-	maxCellLen    = 200  // per-cell character cap
-	maxDocList    = 200  // entries returned by list_docs
-	maxDocHits    = 40   // results returned by search_docs
-	maxDocBytes   = 8000 // read_doc size cap
-	maxToolOutput = 8000 // cap on each tool's output text fed back into the model context
+	maxSQLRows    = 100   // row cap for sql_query output
+	maxCellLen    = 300   // per-cell character cap
+	maxDocList    = 200   // entries returned by list_docs
+	maxDocHits    = 40    // results returned by search_docs
+	maxDocBytes   = 24000 // read_doc size cap
+	maxToolOutput = 24000 // cap on each tool's output text fed back into the model context
 )
 
 // capText bounds a tool's output so a single result can't flood the model's
-// context window across a multi-step tool loop (which otherwise overflows and
-// yields blank answers on complex questions).
+// context window across a multi-step tool loop. With a 128k context the cap is
+// generous (~6k tokens/result); it mainly guards against a pathological single
+// result, not normal multi-step use.
 func capText(s string) string {
 	if len(s) > maxToolOutput {
 		return s[:maxToolOutput] + "\n…(output truncated to fit the model context)"
