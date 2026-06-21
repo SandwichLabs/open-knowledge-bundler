@@ -43,10 +43,9 @@ and point --src at the directory containing kb.txt and the 1-hop/2-hop/3-hop
 folders.
 
 After converting, build a queryable bundle:
-  cd out && cbi init --config domain.yaml \
-    && cbi ingest --nodes nodes.ndjson --edges edges.ndjson --config domain.yaml \
-    && cbi generate okf --skill --include-db -o okf-bundle
-  cbi eval --bundle out/okf-bundle --questions out/questions.jsonl \
+  cd out && cbi ingest --nodes nodes.ndjson --edges edges.ndjson --config domain.yaml \
+    && cbi bundle --skill -o okf-bundle
+  cbi bench eval --bundle out/okf-bundle --questions out/questions.jsonl \
     --vocab out/vocab.txt --by hop
 
 Example:
@@ -152,5 +151,5 @@ func init() {
 	convertMetaQACmd.Flags().StringVar(&mqDBName, "db", "metaqa.duckdb", "database_path to write into domain.yaml")
 	_ = convertMetaQACmd.MarkFlagRequired("src")
 	convertCmd.AddCommand(convertMetaQACmd)
-	rootCmd.AddCommand(convertCmd)
+	benchCmd.AddCommand(convertCmd)
 }

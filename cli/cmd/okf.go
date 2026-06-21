@@ -30,11 +30,13 @@ var (
 	okfNodeTypes  string
 	okfSkill      bool
 	okfIncludeDB  bool
+	okfNoDB       bool
 )
 
 var okfCmd = &cobra.Command{
-	Use:   "okf",
-	Short: "Export the knowledge graph as an Open Knowledge Format (OKF) bundle",
+	Use:   "bundle",
+	Short: "Pack the knowledge graph into a portable bundle (.duckdb + OKF + Skill)",
+	Aliases: []string{"okf"},
 	Long: `Compiles the knowledge graph into an OKF v0.1 bundle: a directory tree of
 markdown files with YAML frontmatter, readable by humans and agents without any
 tooling (see https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md).
@@ -233,7 +235,8 @@ func (b *okfBundle) build() error {
 
 	dbName := ""
 	configName := ""
-	if okfIncludeDB {
+	// A portable bundle includes its database by default; --no-db opts out.
+	if okfIncludeDB && !okfNoDB {
 		var err error
 		if dbName, configName, err = b.copyArtifacts(); err != nil {
 			return err
@@ -1012,11 +1015,12 @@ func joinOrDash(s []string) string {
 }
 
 func init() {
-	okfCmd.Flags().StringVarP(&okfOutDir, "output", "o", "okf", "output directory for the OKF bundle")
+	okfCmd.Flags().StringVarP(&okfOutDir, "output", "o", "bundle", "output directory for the bundle")
 	okfCmd.Flags().StringVar(&okfMode, "mode", "both", "what to emit: full | catalog | both")
 	okfCmd.Flags().IntVar(&okfMaxPerType, "max-per-type", 0, "cap per-node documents written per node type (0 = unlimited)")
 	okfCmd.Flags().StringVar(&okfNodeTypes, "node-types", "", "comma-separated list of node types to include (default: all)")
 	okfCmd.Flags().BoolVar(&okfSkill, "skill", false, "emit a SKILL.md so the bundle doubles as a self-describing agent skill")
-	okfCmd.Flags().BoolVar(&okfIncludeDB, "include-db", false, "copy the DuckDB database and domain config into the bundle")
-	generateCmd.AddCommand(okfCmd)
+	okfCmd.Flags().BoolVar(&okfIncludeDB, "include-db", true, "copy the DuckDB database and domain config into the bundle")
+	okfCmd.Flags().BoolVar(&okfNoDB, "no-db", false, "omit the database/config — emit OKF markdown only (not a self-contained bundle)")
+	rootCmd.AddCommand(okfCmd)
 }

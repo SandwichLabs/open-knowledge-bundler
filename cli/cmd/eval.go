@@ -254,5 +254,5 @@ func init() {
 	evalCmd.Flags().StringVar(&evalOut, "out", "", "write per-question results to this JSONL file")
 	_ = evalCmd.MarkFlagRequired("bundle")
 	_ = evalCmd.MarkFlagRequired("questions")
-	rootCmd.AddCommand(evalCmd)
+	benchCmd.AddCommand(evalCmd)
 }

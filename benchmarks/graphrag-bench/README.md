@@ -41,18 +41,17 @@ the normal `cbi` pipeline plus an adapter to GraphRAG-Bench's results schema.
 python3 extract_graph.py --corpus medical.json --out med-graph \
     --endpoint http://localhost:8080 --chunk-chars 3000 --max-chars 250000
 
-# 2. Ingest -> bundle (needs the :8181 embedding server).
+# 2. Ingest -> bundle (needs the :8181 embedding server; ingest auto-initializes).
 cd med-graph
-cbi init   --config domain.yaml
 cbi ingest --nodes nodes.ndjson --edges edges.ndjson --config domain.yaml
-cbi generate okf --skill --include-db --config domain.yaml -o okf-bundle
+cbi bundle --skill --config domain.yaml -o okf-bundle
 cp vocab.txt okf-bundle/vocab.txt && cd ..
 
 # 3. Pick questions the graph can answer, stratified by type.
 python3 prep_questions.py --graph-vocab med-graph/vocab.txt --per-type 8 --min-hits 2 --out med-q.jsonl
 
 # 4. Answer them with the local agent (model loads once), capturing context.
-cbi answer --bundle med-graph/okf-bundle --questions med-q.jsonl --out med-answers.json
+cbi bench answer --bundle med-graph/okf-bundle --questions med-q.jsonl --out med-answers.json
 
 # 5. Map to GraphRAG-Bench schema, then judge with the LOCAL model.
 python3 to_grbench.py --answers med-answers.json --out grbench_results.json

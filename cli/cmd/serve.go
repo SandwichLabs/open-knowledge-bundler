@@ -326,5 +326,5 @@ func escapeSQL(s string) string {
 
 func init() {
 	serveCmd.Flags().StringVar(&serveAddr, "addr", "127.0.0.1:8765", "listen address")
-	rootCmd.AddCommand(serveCmd)
+	siteCmd.AddCommand(serveCmd)
 }

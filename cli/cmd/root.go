@@ -12,8 +12,16 @@ var cfgFile string
 
 var rootCmd = &cobra.Command{
 	Use:   "cbi",
-	Short: "Chicago Business Intelligence — local-first GraphRAG CLI",
-	Long:  "A domain-agnostic, local-first CLI for constructing, analyzing, and querying knowledge graphs backed by DuckDB.",
+	Short: "Build portable knowledge bundles (GraphRAG) from any domain",
+	Long: `cbi turns a domain (a prose corpus or structured data) into a portable
+knowledge bundle — a DuckDB graph + browsable OKF markdown + an agent skill —
+that any agent can query, all local-first.
+
+  BUILD     extract · ingest · bundle      (input → graph → portable bundle)
+  INSPECT   query · graph · schema         (validate the graph)
+  CONSUME   agent                          (chat / --ask over a bundle, fully local)
+  bench …   answer · eval · convert        (benchmark the local agent)
+  site …    generate · serve               (hosted graph viewer)`,
 }
 
 func Execute() {

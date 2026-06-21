@@ -8,11 +8,12 @@
 A declarative toolkit for building local-first knowledge graphs with hybrid search. Define your domain in YAML, ingest data, and get vector + lexical + graph search out of the box — as a CLI or as a self-contained browser app.
 
 ```
-domain.yaml  -->  cbi init + ingest  -->  DuckDB knowledge graph
+domain.yaml + data  -->  cbi ingest  -->  DuckDB knowledge graph
                                               |
                                               +--> cbi query "semantic search"
                                               +--> cbi graph "SQL/PGQ graph traversal"
-                                              +--> compile --> standalone HTML search app
+                                              +--> cbi bundle --> portable bundle (.duckdb + OKF + Skill)
+                                              +--> cbi agent  --> fully-local chat over the bundle
 ```
 
 ## What it does
@@ -39,9 +40,8 @@ domain.yaml  -->  cbi init + ingest  -->  DuckDB knowledge graph
 # Build the CLI
 task build
 
-# Initialize, ingest, and query the test dataset
+# Ingest and query the test dataset (ingest auto-initializes the DB)
 cd test
-../cli/cbi init --config domain.yaml
 ../cli/cbi ingest --nodes nodes.ndjson --config domain.yaml --batch-size 50
 ../cli/cbi ingest --edges edges.ndjson --config domain.yaml
 ../cli/cbi query --text "fire breathing dragon" --config domain.yaml --limit 5
@@ -120,31 +120,38 @@ The `semantic_text` field is what gets embedded and searched. You can craft it h
 ## CLI reference
 
 ```bash
-cbi init    --config domain.yaml                    # Create DB, schema, indexes, property graph
-cbi ingest  --nodes n.ndjson --edges e.ndjson        # Ingest data (batched)
-cbi ingest  --file data.json                         # Single JSON: {nodes: [...], edges: [...]}
-cbi query   --text "search" --limit 10               # Hybrid search (BM25 + vector + RRF)
-cbi query   --text "search" --date 2025-01-01        # Temporal filter
+# BUILD — input → graph → portable bundle (ingest auto-initializes the DB)
+cbi ingest  --nodes n.ndjson --edges e.ndjson        # Ingest data (batched); also --file data.json
+cbi bundle  -o bundle/ [--skill] [--no-db]           # Pack a portable bundle (.duckdb + OKF + Skill)
+
+# INSPECT — validate the graph
+cbi query   --text "search" --limit 10               # Hybrid search (BM25 + vector + RRF); --date for temporal
 cbi graph   --sql "FROM GRAPH_TABLE(...)"            # Raw SQL/PGQ queries
 cbi schema                                           # Schema readout with query examples
-cbi serve   --port 8080                              # HTTP API + D3 graph viewer
-cbi generate -o dist/                                # Self-contained static site bundle
-cbi generate okf -o okf/                             # Open Knowledge Format (OKF) markdown bundle
+
+# CONSUME — fully-local agent over a bundle
+cbi agent   --bundle ./bundle [--ask "q" --json]     # Chat TUI / one-shot answer
+
+# bench (benchmark scaffolding) · site (hosted viewer)
+cbi bench eval|answer|convert ...                    # Evaluate the local agent
+cbi site generate -o dist/ | cbi site serve          # Static site / live HTTP API + D3 viewer
 ```
 
-### OKF export
+### OKF bundle export
 
-`cbi generate okf` exports the graph as an [Open Knowledge Format](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md)
-v0.1 bundle — a directory tree of markdown files with YAML frontmatter, readable
-by humans and agents with no tooling and diffable in git.
+`cbi bundle` packs the graph into a portable bundle: an [Open Knowledge Format](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md)
+v0.1 directory tree of markdown (readable by humans and agents with no tooling,
+diffable in git) plus — by default — the DuckDB database and domain config, so the
+bundle is self-contained and queryable.
 
 ```bash
-cbi generate okf -o okf/ --mode both          # catalog + one doc per node (default)
-cbi generate okf -o okf/ --mode catalog       # per-type / per-relationship schema only
-cbi generate okf -o okf/ --mode full          # one concept document per node
-cbi generate okf --node-types Business,Ward   # restrict to specific node types
-cbi generate okf --max-per-type 50            # cap per-node docs written per type
-cbi generate okf --skill --include-db         # self-contained agent skill (see below)
+cbi bundle -o bundle/ --mode both        # catalog + one doc per node (default)
+cbi bundle -o bundle/ --mode catalog     # per-type / per-relationship schema only
+cbi bundle -o bundle/ --mode full        # one concept document per node
+cbi bundle --node-types Business,Ward    # restrict to specific node types
+cbi bundle --max-per-type 50             # cap per-node docs written per type
+cbi bundle --skill                       # add SKILL.md → self-contained agent skill (DB included by default)
+cbi bundle --no-db                       # OKF markdown only (omit DB/config)
 ```
 
 Layout: `index.md` (root listing, carries `okf_version`), `log.md`, `catalog/`

@@ -25,7 +25,7 @@ var agentCmd = &cobra.Command{
 	Short: "Chat with an OKF bundle using a self-contained local LLM",
 	Long: `Opens an interactive chat TUI backed entirely by local models (via kronk /
 llama.cpp). The agent answers questions about an OKF bundle produced by
-'cbi generate okf --skill --include-db' using SQL queries against the bundle's
+'cbi bundle --skill' using SQL queries against the bundle's
 DuckDB graph plus exploration of its markdown concept documents.
 
 On first run you choose a model size; the choice (and model/processor settings)

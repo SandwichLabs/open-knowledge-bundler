@@ -273,9 +273,9 @@ The exercise that found these weakpoints is the acceptance test. After building:
    - node/edge counts; alias coverage
    - spot-check known failures: `adrenocortical_carcinoma` now has direct
      symptom edges; `pheochromocytoma` node exists.
-3. Answer-quality delta (the real number): re-bundle (`cbi generate okf
-   --skill --include-db`), re-run **the same 32 questions** through both paths:
-   - local agent: `cbi answer --bundle … --questions /tmp/grbench/med-q.jsonl`
+3. Answer-quality delta (the real number): re-bundle (`cbi bundle --skill`),
+   re-run **the same 32 questions** through both paths:
+   - local agent: `cbi bench answer --bundle … --questions /tmp/grbench/med-q.jsonl`
    - Sonnet subagents over the bundle (see the harness used in this session;
      answers → `to_grbench.py` → `run_judge.sh`)
    Compare `answer_correctness` by question type vs the v1 baselines:

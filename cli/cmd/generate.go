@@ -339,5 +339,5 @@ func writeFloat32Bin(path string, vec []float32) error {
 
 func init() {
 	generateCmd.Flags().StringVarP(&generateOutDir, "output", "o", "dist", "output directory for the static bundle")
-	rootCmd.AddCommand(generateCmd)
+	siteCmd.AddCommand(generateCmd)
 }

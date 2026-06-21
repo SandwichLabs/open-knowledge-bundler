@@ -18,27 +18,42 @@ task clean:db                 # Delete the knowledge graph database (prompts)
 
 ### CLI (after `task build`, run from directory containing domain.yaml)
 
+The surface is focused on building portable knowledge bundles. Top-level groups:
+**BUILD** (extract¹ · ingest · bundle), **INSPECT** (query · graph · schema),
+**CONSUME** (agent), plus quarantined **bench** and **site** namespaces.
+(¹`extract` is the planned in-process LLM extractor — see `benchmarks/graphrag-bench/EXTRACTOR_HANDOFF.md`.)
+
 ```bash
-cbi init --config domain.yaml                          # Create DB, load extensions, schema, indexes, property graph
-cbi ingest --nodes n.ndjson --edges e.ndjson            # NDJSON mode (batched, one record per line)
-cbi ingest --file data.json                             # Single JSON mode ({nodes: [...], edges: [...]})
+# BUILD — input → graph → portable bundle (ingest/extract auto-initialize the DB)
+cbi ingest --nodes n.ndjson --edges e.ndjson            # NDJSON mode (batched); also --file data.json
+cbi bundle -o bundle/ [--skill] [--no-db] [--mode both|catalog|full] [--node-types ...] [--max-per-type N]
+                                                        # Pack a portable bundle (.duckdb + OKF + Skill). --include-db is the DEFAULT; --no-db = markdown only.
+
+# INSPECT — validate the graph
 cbi query --text "search" --limit 10 [--date 2025-01-01]  # Hybrid search with optional temporal filter
 cbi graph --sql "FROM GRAPH_TABLE(...)"                 # Raw SQL/PGQ queries
 cbi schema                                             # LLM-friendly schema readout with query examples
-cbi generate -o dist/                                  # Self-contained static site bundle
-cbi generate okf -o okf/ [--mode both|catalog|full] [--node-types ...] [--max-per-type N]  # OKF v0.1 markdown bundle
-cbi generate okf --skill --include-db                  # OKF bundle as a self-contained agent skill (SKILL.md + .duckdb + domain.yaml)
-cbi agent --bundle ./okf-bundle                        # Chat TUI over a bundle, fully local (kronk LLM + embeddings)
-cbi agent --bundle ./okf-bundle --ask "question"       # One-shot, non-interactive answer (no TUI)
-cbi agent --bundle ./okf-bundle --ask "question" --json # One-shot structured result (answer + tool trace + tokens + timing) on stdout — for eval harnesses
-cbi agent --bundle ./okf-bundle --tier large --gpu vulkan  # Pick model size / llama.cpp backend
-cbi eval --bundle ./okf-bundle --questions q.jsonl --vocab vocab.txt --by hop  # Benchmark the agent against a known-answer set
-cbi convert metaqa --src ./MetaQA --out ./metaqa-cbi --sample 100  # Convert MetaQA → cbi domain + eval question set
+
+# CONSUME — fully-local agent over a bundle
+cbi agent --bundle ./bundle                            # Chat TUI (kronk LLM + embeddings)
+cbi agent --bundle ./bundle --ask "question" [--json]  # One-shot answer; --json adds tool trace + tokens + timing
+cbi agent --bundle ./bundle --tier large --gpu vulkan  # Pick model size / llama.cpp backend
+
+# bench — benchmark scaffolding (not part of the build pipeline)
+cbi bench eval --bundle ./bundle --questions q.jsonl --vocab vocab.txt --by hop
+cbi bench answer --bundle ./bundle --questions q.jsonl --out answers.json
+cbi bench convert metaqa --src ./MetaQA --out ./metaqa-cbi --sample 100
+
+# site — hosted graph viewer (separate from the portable bundle)
+cbi site generate -o dist/                             # Self-contained static site
+cbi site serve --addr 127.0.0.1:8765                   # Live HTTP API + UI
+
+# cbi init is now hidden — ingest/extract initialize the DB automatically.
 ```
 
-### Benchmarking (`cbi eval`)
+### Benchmarking (`cbi bench eval`)
 
-`cbi eval` runs the local agent over a `questions.jsonl` answer key (one
+`cbi bench eval` runs the local agent over a `questions.jsonl` answer key (one
 `{"question","gold":[...],"tags":{...}}` per line) and scores answers
 deterministically — `recall`, `exact` (Hits@all), and `precision`/`F1` when an
 entity-name `--vocab` is supplied (precision catches over-generation/hallucination
@@ -47,15 +62,17 @@ confident wrong answers. The model loads once per tier (in-process via the agent
 session's `Answer()`), so it is far faster than `--ask` per question. Sweep model
 sizes with repeated `--tier`; break the leaderboard down with `--by <tag>`; write
 per-question results with `--out`. Code: `cli/eval/` (scoring) + `cli/cmd/eval.go`.
+(`init`, `eval`, `answer`, `convert`, `generate`, `serve` were pruned/regrouped on
+2026-06-21; the build surface is now extract/ingest/bundle — see the CLI block above.)
 
-### Dataset conversion (`cbi convert metaqa`)
+### Dataset conversion (`cbi bench convert metaqa`)
 
 Converts a local [MetaQA](https://github.com/yuyuz/MetaQA) checkout (download from
 the Google Drive linked in its README) into the cbi ingest format + an eval set.
-After converting: `cbi init` → `cbi ingest --nodes nodes.ndjson --edges
-edges.ndjson` → `cbi generate okf --include-db` → `cbi eval`. Code: `cli/metaqa/`
-+ `cli/cmd/convert_metaqa.go`. Ingest needs a 768-dim embedding endpoint (see the
-embedding-server note); `cbi eval` then runs fully local via kronk.
+After converting: `cbi ingest --nodes nodes.ndjson --edges edges.ndjson` →
+`cbi bundle --skill` → `cbi bench eval`. Code: `cli/metaqa/` +
+`cli/cmd/convert_metaqa.go`. Ingest needs a 768-dim embedding endpoint (see the
+embedding-server note); `cbi bench eval` then runs fully local via kronk.
 
 ### Local Agent (`cbi agent`)
 
@@ -94,8 +111,7 @@ task graph:stats                      # Node/edge counts in knowledge graph
 ```bash
 cd test
 rm -f pokemon.duckdb
-../cli/cbi init --config domain.yaml
-../cli/cbi ingest --nodes nodes.ndjson --config domain.yaml --batch-size 10
+../cli/cbi ingest --nodes nodes.ndjson --config domain.yaml --batch-size 10   # auto-initializes the DB
 ../cli/cbi ingest --edges edges.ndjson --config domain.yaml
 ../cli/cbi query --text "fire breathing dragon" --config domain.yaml --limit 3
 ```

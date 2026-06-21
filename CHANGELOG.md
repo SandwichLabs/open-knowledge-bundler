@@ -3,6 +3,32 @@
 All notable changes to `cbi` (the graph-search-tool CLI) are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased] — 2026-06-21
+
+### Changed — pruned the CLI surface around portable knowledge bundles
+
+The command surface had accreted three concerns (build, inspect, benchmark) plus a
+hosted-viewer. It is now focused on **building portable knowledge bundles (.duckdb
++ OKF + Skill) from a domain config**, in preparation for the in-process extractor
+(`cbi extract`, see `benchmarks/graphrag-bench/EXTRACTOR_HANDOFF.md`).
+
+- **`generate okf` → `cbi bundle`** (top-level). `--include-db` is now the **default**
+  (a portable bundle includes its database); new `--no-db` emits OKF markdown only.
+  Default output dir `okf/` → `bundle/`. The old name is kept as a hidden `okf` alias.
+- **`init` folded in.** `ingest` (and the planned `extract`) now auto-initialize the
+  database — schema/index/property-graph creation is idempotent, so no separate step
+  is needed. `cbi init` remains as a hidden escape hatch.
+- **Benchmark tools quarantined under `cbi bench`:** `answer`, `eval`, and `convert`
+  are now `cbi bench answer|eval|convert` — research scaffolding, off the main surface.
+- **Hosted viewer split under `cbi site`:** the static-site generator and HTTP server
+  are now `cbi site generate|serve`, distinct from the portable bundle.
+- **Root rebranded** from "Chicago Business Intelligence" to a domain-agnostic
+  bundle-builder, with a grouped (BUILD / INSPECT / CONSUME / bench / site) help.
+
+Net top-level surface: `extract`¹ · `ingest` · `bundle` · `query` · `graph` ·
+`schema` · `agent`, plus the `bench` and `site` namespaces. (¹extract is the next
+build.)
+
 ## [Unreleased] — 2026-06-19
 
 ### Fixed — agent context-window overflow on multi-step questions

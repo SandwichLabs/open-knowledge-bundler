@@ -63,6 +63,12 @@ Supports two modes:
 			return fmt.Errorf("loading extensions: %w", err)
 		}
 
+		// Auto-initialize: create schema/index/property-graph if absent (idempotent),
+		// so a separate `cbi init` is no longer required before ingesting.
+		if err := initializeDB(db, viper.GetInt("embedding_dim")); err != nil {
+			return fmt.Errorf("initializing database: %w", err)
+		}
+
 		client := embed.NewClient(endpointURL, model)
 
 		// Determine ingestion mode.

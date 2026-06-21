@@ -17,7 +17,7 @@ import (
 )
 
 // Bundle is a loaded OKF + skill bundle as produced by
-// `cbi generate okf --skill --include-db`.
+// `cbi bundle --skill`.
 type Bundle struct {
 	Dir    string              // bundle root directory
 	Skill  string              // raw SKILL.md contents (system-prompt base), may be empty
@@ -70,7 +70,7 @@ func LoadBundle(dir, dbOverride string) (*Bundle, error) {
 		return nil, fmt.Errorf("domain.yaml has no database_path; pass --db <path>")
 	}
 	if _, err := os.Stat(b.DBPath); err != nil {
-		return nil, fmt.Errorf("bundle database %q not found: %w\nregenerate with `cbi generate okf --include-db`, or pass --db <path>", b.DBPath, err)
+		return nil, fmt.Errorf("bundle database %q not found: %w\nregenerate with `cbi bundle`, or pass --db <path>", b.DBPath, err)
 	}
 
 	// Index markdown docs for the exploration tools.
@@ -124,7 +124,7 @@ func findDomainConfig(dir string) (string, error) {
 			return full, nil
 		}
 	}
-	return "", fmt.Errorf("no domain config (domain.yaml) found in bundle %q; regenerate with `cbi generate okf --include-db`", dir)
+	return "", fmt.Errorf("no domain config (domain.yaml) found in bundle %q; regenerate with `cbi bundle`", dir)
 }
 
 // ReadDoc reads a bundle-relative markdown path, confined to the bundle dir.

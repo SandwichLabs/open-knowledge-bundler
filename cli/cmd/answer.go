@@ -180,5 +180,5 @@ func init() {
 	answerCmd.Flags().IntVar(&ansCtxChars, "context-chars", 12000, "cap retrieved-context length per question (0 = no cap)")
 	_ = answerCmd.MarkFlagRequired("bundle")
 	_ = answerCmd.MarkFlagRequired("questions")
-	rootCmd.AddCommand(answerCmd)
+	benchCmd.AddCommand(answerCmd)
 }
