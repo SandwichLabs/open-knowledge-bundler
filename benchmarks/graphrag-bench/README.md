@@ -6,9 +6,21 @@ benchmark, with **graph construction and judging both done by a local LLM** — 
 API keys, nothing leaves the box.
 
 The benchmark targets systems that build a knowledge graph *from a document
-corpus*. `cbi` ingests pre-structured graphs, so step 1 below adds an LLM
-entity/relation-extraction pass to turn the corpus into nodes/edges; the rest is
-the normal `cbi` pipeline plus an adapter to GraphRAG-Bench's results schema.
+corpus*. `cbi` now does this in-process with **`cbi extract`** (local LLM,
+ontology bootstrap + grammar-constrained extraction + gleaning + entity
+resolution + relation normalization — see `EXTRACTOR_HANDOFF.md`), which replaces
+the throwaway `extract_graph.py` baseline below. The rest is the normal `cbi`
+pipeline plus an adapter to GraphRAG-Bench's results schema.
+
+```bash
+# Step 1, the cbi way (fully local, no :8080 server):
+cbi extract --corpus medical.json -o med-graph/ \
+    --bootstrap --yes --glean 1 --resolve --ingest --tier large
+# -> med-graph/{nodes,edges}.ndjson, domain.yaml (with ontology), vocab.txt,
+#    and med-graph/<db>.duckdb. Then bundle + prep + answer + judge as before.
+```
+
+The original Python pipeline (kept for comparison / the v1 baseline) follows.
 
 ## Pieces
 

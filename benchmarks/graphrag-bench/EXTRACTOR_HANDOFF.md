@@ -1,8 +1,30 @@
 # `cbi extract` — Fully-Local Graph Extraction Pipeline (Build Handoff)
 
-**Status:** designed, not yet built. This document is a cold-start spec: a fresh
-agent should be able to implement the whole feature from it without re-deriving
-the integration points.
+**Status:** ✅ **built** (2026-06-21). Implemented in `cli/extract/` +
+`cli/cmd/extract.go`, registered in the BUILD group. All five stages, the
+kronk grammar integration, and the deterministic helpers are in place;
+`go build/vet/test` pass and a live bootstrap→extract→resolve→ingest smoke run
+against the medical corpus works in-process on the 12B (Vulkan). What remains is
+the §7 answer-quality regression (re-run the 32-Q judge vs the v1 baselines).
+This document is retained as the design record. Build map:
+
+| Stage | File | Status |
+|-------|------|--------|
+| types (Ontology/RelationDef/TypeDef) | `cli/domain/config.go` | ✅ |
+| generator (kronk Chat + response_format) | `cli/extract/llm.go` | ✅ |
+| chunker (sentence-aware + sample) | `cli/extract/chunk.go` | ✅ |
+| accumulator + name/relation normalization | `cli/extract/graph.go` | ✅ |
+| corpus loader (json/txt/dir) | `cli/extract/corpus.go` | ✅ |
+| stage 0 ontology bootstrap | `cli/extract/ontology.go` | ✅ |
+| stage 1–2 extract + glean | `cli/extract/extract.go` | ✅ |
+| stage 3 entity resolution | `cli/extract/resolve.go` | ✅ |
+| stage 4 relation normalize + direction | `cli/extract/normalize.go` | ✅ |
+| stage 5 emit + in-process ingest | `cli/extract/emit.go` | ✅ |
+| command (flags, model load, run) | `cli/cmd/extract.go` | ✅ |
+| deterministic-stage unit tests | `cli/extract/extract_test.go` | ✅ |
+
+This document was a cold-start spec: a fresh agent should be able to implement
+the whole feature from it without re-deriving the integration points.
 
 **Motivation:** the throwaway `extract_graph.py` (Qwen-35B over HTTP, single
 pass) built the GraphRAG-Bench medical graph, and a benchmarking exercise
@@ -201,6 +223,21 @@ func (g *Generator) Generate(ctx context.Context, system, user string, schema mo
     return resp.Choices[0].Message.Content, nil // grammar guarantees valid JSON
 }
 ```
+
+**⚠️ Gotcha discovered during the build — no `enum` in the schema.** kronk
+v1.28.0's JSON-schema→GBNF generator (`grammar.go`) emits a grammar that
+llama.cpp's `SamplerInitGrammar` **rejects (returns 0) whenever an `enum` is
+present**. When that happens `NewGrammarSampler` returns `nil` and
+`SampleWithGrammar` **silently falls back to unconstrained sampling** — so the
+schema is *not* enforced at all and the model emits malformed JSON (objects
+closed with `]`, missing required fields). A structure-only schema (no `enum`)
+compiles to a grammar llama.cpp accepts and *is* enforced. Therefore the
+extractor keeps schemas enum-free and enforces the closed vocabulary **in code**:
+unknown entity types are coerced to `Other` (Stage 1), off-vocabulary relations
+are mapped/bucketed (Stage 4), and `GenerateJSON` cleans + repairs + retries as a
+final safety net. If a future kronk fixes enum grammars, the enum can be restored
+in `buildExtractionSchema`/`relationsSchema` to push the constraint back to the
+token level.
 
 Key facts:
 - `model.D` is `map[string]any`. Messages are `[]model.D` of `{"role","content"}`.

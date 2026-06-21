@@ -5,6 +5,39 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] — 2026-06-21
 
+### Added — `cbi extract`: fully-local, in-process graph extraction
+
+Turns a prose corpus into a resolved knowledge graph with a **local LLM** (kronk /
+llama.cpp, no external server), folding extraction into `cbi` itself. It addresses
+the six weakpoints a benchmarking exercise found in the throwaway `extract_graph.py`
+(see `benchmarks/graphrag-bench/EXTRACTOR_HANDOFF.md`): duplicate entities, runaway
+relation vocabulary, low recall, wrong granularity, brittle JSON parsing, and not
+being self-contained.
+
+Five stages, all in-process:
+- **Ontology bootstrap** — the model proposes a *compact, closed* vocabulary
+  (≤ ~20 entity types, ≤ ~40 directional relations) from a corpus sample, written to
+  the `domain.yaml` `ontology:` block. "Bootstrap, then editable": an automatic
+  bootstrap stops for review; `--bootstrap`/`--yes` continues.
+- **Extraction** — per-chunk entity/relation extraction with the entity `type` and
+  `relation` fields **enum-constrained to the ontology** via kronk's `response_format`
+  → GBNF grammar. This kills vocabulary sprawl at the token level and makes malformed
+  JSON impossible.
+- **Gleaning** (`--glean K`) — extra recall passes per chunk asking only for what was
+  missed, stopping when a round is dry.
+- **Entity resolution** (`--resolve`) — exact-merge by normalized name, then
+  embedding-cluster within each type (in-process EmbeddingGemma), LLM-adjudicating
+  only gray-band pairs; canonicalizes clusters, unions aliases, and remaps edges.
+- **Relation normalization** — rewrites inverse phrasings to the canonical direction,
+  validates/repairs endpoint orientation against declared `source_type -> target_type`,
+  and maps any off-vocabulary drift, with full counts (no silent loss).
+
+Emits the standard cbi ingest shape (`nodes.ndjson`, `edges.ndjson`, `domain.yaml`,
+`vocab.txt`) carrying `aliases`/`provenance`; `--ingest` loads it straight into DuckDB
+in-process (embeddings local too). Default tier `large` (Gemma-4-12B); `--tier`/
+`--model`/`--gpu` select size/backend. Code: `cli/extract/` + `cli/cmd/extract.go`;
+deterministic stages covered by `cli/extract/extract_test.go`.
+
 ### Changed — pruned the CLI surface around portable knowledge bundles
 
 The command surface had accreted three concerns (build, inspect, benchmark) plus a
