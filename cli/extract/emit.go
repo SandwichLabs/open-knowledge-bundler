@@ -56,6 +56,17 @@ func Emit(dir string, ont *domain.Ontology, res *Resolved, opts EmitOptions) err
 	return nil
 }
 
+// maxSemanticAliases / maxSemanticChars bound the alias text folded into a
+// node's semantic_text. A hub node can accumulate hundreds of aliases during
+// resolution; embedding models cap input (EmbeddingGemma = 512 tokens), so an
+// unbounded join overflows and the embed call fails. All aliases are still kept
+// in properties.aliases for lexical recall — only the embedding input is
+// bounded (a few dozen aliases already saturate the semantic signal).
+const (
+	maxSemanticAliases = 30
+	maxSemanticChars   = 1200
+)
+
 // ToNode converts a resolved node to the ingest domain.Node shape.
 func ToNode(n ResolvedNode) domain.Node {
 	props := map[string]any{"name": n.Name}
@@ -67,7 +78,14 @@ func ToNode(n ResolvedNode) domain.Node {
 	}
 	semantic := n.Name
 	if len(n.Aliases) > 0 {
-		semantic = n.Name + " (" + strings.Join(n.Aliases, ", ") + ")"
+		al := n.Aliases
+		if len(al) > maxSemanticAliases {
+			al = al[:maxSemanticAliases]
+		}
+		semantic = n.Name + " (" + strings.Join(al, ", ") + ")"
+		if len(semantic) > maxSemanticChars {
+			semantic = semantic[:maxSemanticChars]
+		}
 	}
 	return domain.Node{
 		NodeID:       n.ID,
