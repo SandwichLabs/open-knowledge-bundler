@@ -52,9 +52,9 @@ Use --max-per-type to cap how many per-node documents are written for each type
 (0 = unlimited); excess nodes are dropped from the dump (links to them become
 tolerated broken links, per the spec).
 
-Use --skill to also emit a SKILL.md so the bundle doubles as a self-describing
-agent skill, and --include-db to copy the DuckDB database and domain config into
-the bundle. Combined (--skill --include-db), the result is a fully self-contained
+The DuckDB database and domain config are copied into the bundle by default, so it
+is self-contained and queryable; pass --no-db to emit OKF markdown only. Add
+--skill to also emit a SKILL.md so the bundle doubles as a self-describing agent
 skill: browsable OKF markdown for orientation plus a queryable database for
 precise hybrid (vector + lexical + graph) retrieval.
 
@@ -64,8 +64,8 @@ Output (under <out>/):
   catalog/            per-type / per-relationship schema concepts (catalog, both)
   <NodeType>/         per-node concept documents + index.md (full, both)
   SKILL.md            agent usage guide (--skill)
-  <db>.duckdb         copy of the knowledge graph database (--include-db)
-  domain.yaml         copy of the domain config (--include-db)`,
+  <db>.duckdb         copy of the knowledge graph database (default; omit with --no-db)
+  domain.yaml         copy of the domain config (default; omit with --no-db)`,
 	RunE: runOKF,
 }
 

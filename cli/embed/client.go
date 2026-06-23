@@ -34,8 +34,18 @@ type embeddingResponse struct {
 	} `json:"data"`
 }
 
+// maxEmbedChars is a defensive ceiling on input length. EmbeddingGemma caps
+// input at 512 tokens (≈ 2000 chars); a hub node's semantic_text can exceed
+// that, and not every endpoint auto-truncates, so we bound it well under the
+// limit (~450 tokens) to avoid a hard error at the cost of dropping trailing
+// alias text that adds little embedding signal.
+const maxEmbedChars = 1800
+
 // Embed sends text to the configured endpoint and returns the embedding vector.
 func (c *Client) Embed(ctx context.Context, text string) ([]float32, error) {
+	if len(text) > maxEmbedChars {
+		text = text[:maxEmbedChars]
+	}
 	body, err := json.Marshal(embeddingRequest{Model: c.model, Input: text})
 	if err != nil {
 		return nil, err

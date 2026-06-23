@@ -69,7 +69,7 @@ func (e *Embedder) Embed(ctx context.Context, text string) ([]float32, error) {
 		defer cancel()
 	}
 
-	d := model.D{"input": text}
+	d := model.D{"input": text, "truncate": true} // truncate over-long inputs instead of erroring
 	if e.dim > 0 {
 		d["dimensions"] = e.dim // Matryoshka reduction to match the bundle index
 	}

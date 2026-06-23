@@ -1,8 +1,58 @@
 # `cbi extract` — Fully-Local Graph Extraction Pipeline (Build Handoff)
 
-**Status:** designed, not yet built. This document is a cold-start spec: a fresh
-agent should be able to implement the whole feature from it without re-deriving
-the integration points.
+**Status:** ✅ **built + benchmarked + validated** (2026-06-21/23). Implemented in
+`cli/extract/` + `cli/cmd/extract.go`, registered in the BUILD group. All five
+stages run fully in-process on the 12B (Vulkan), no external LLM server.
+
+**§7 result — the new local extractor beats both the Qwen-35B-built v1 graph and
+frontier Sonnet on the same 32-Q judge.** answer_correctness: v1 **0.520** →
+first run (over-merged) **0.405** → fixed resolver **0.581**. The regression
+traced to entity **over-merge** (single-linkage clustering chained 120+ distinct
+cancers into one `disease:cancer` node, gutting Fact Retrieval 0.404 → 0.285);
+the fix — **representative-based (leader) clustering** with higher thresholds +
+LLM adjudication — restored granularity (349-alias hub → 3 aliases; 81 distinct
+cancer subtypes preserved) and lifted Fact Retrieval to **0.452**, topping both
+v1 (0.404) and Sonnet (0.429). The pre-resolution graph is persisted
+(`raw-extraction.json` + `--from-raw`) so resolution re-tunes in minutes (28s)
+without re-extracting. Thesis flips: a better graph lifted a small local answerer
+above frontier.
+
+| Run | nodes | edges | rel-types | AC overall | Fact | Complex | Summ | Creative |
+|-----|------:|------:|----------:|-----------:|-----:|--------:|-----:|---------:|
+| v1 (extract_graph.py, Qwen-35B/HTTP) | — | — | ~150 | 0.520 | 0.404 | 0.590 | 0.565 | 0.520 |
+| Sonnet over the v1 bundle | — | — | ~150 | 0.491 | 0.429 | 0.453 | 0.517 | 0.563 |
+| v2 (cbi extract, over-merged) | 1778 | 3884 | 20 | 0.405 | 0.285 | 0.423 | 0.408 | 0.504 |
+| **v2b (cbi extract, leader-clustering fix)** | **2990** | **6593** | **21** | **0.581** | **0.452** | **0.586** | **0.635** | **0.650** |
+
+Settings for v2b: `--bootstrap --yes --glean 1 --resolve --ingest --tier large
+--gpu vulkan --max-tokens 3072` (the 3072 cap eliminated the long-tail per-call
+deadlines and cut pace ~6.3 → ~4.1 min/chunk). Artifacts in `/tmp/grbench/`:
+`med-v3/` (graph + `raw-extraction.json`), `med-answers-v3.json`,
+`med-judge-v3.json`. NB: answering (12B@128k agent) and the resident Qwen-35B
+judge **cannot co-reside on this GPU** (Vulkan `DeviceLostError`) — run the
+answering with `:8080` stopped, then restart it for judging.
+
+Build map:
+
+Build map:
+
+| Stage | File | Status |
+|-------|------|--------|
+| types (Ontology/RelationDef/TypeDef) | `cli/domain/config.go` | ✅ |
+| generator (kronk Chat + response_format) | `cli/extract/llm.go` | ✅ |
+| chunker (sentence-aware + sample) | `cli/extract/chunk.go` | ✅ |
+| accumulator + name/relation normalization | `cli/extract/graph.go` | ✅ |
+| corpus loader (json/txt/dir) | `cli/extract/corpus.go` | ✅ |
+| stage 0 ontology bootstrap | `cli/extract/ontology.go` | ✅ |
+| stage 1–2 extract + glean | `cli/extract/extract.go` | ✅ |
+| stage 3 entity resolution | `cli/extract/resolve.go` | ✅ |
+| stage 4 relation normalize + direction | `cli/extract/normalize.go` | ✅ |
+| stage 5 emit + in-process ingest | `cli/extract/emit.go` | ✅ |
+| command (flags, model load, run) | `cli/cmd/extract.go` | ✅ |
+| deterministic-stage unit tests | `cli/extract/extract_test.go` | ✅ |
+
+This document was a cold-start spec: a fresh agent should be able to implement
+the whole feature from it without re-deriving the integration points.
 
 **Motivation:** the throwaway `extract_graph.py` (Qwen-35B over HTTP, single
 pass) built the GraphRAG-Bench medical graph, and a benchmarking exercise
@@ -201,6 +251,21 @@ func (g *Generator) Generate(ctx context.Context, system, user string, schema mo
     return resp.Choices[0].Message.Content, nil // grammar guarantees valid JSON
 }
 ```
+
+**⚠️ Gotcha discovered during the build — no `enum` in the schema.** kronk
+v1.28.0's JSON-schema→GBNF generator (`grammar.go`) emits a grammar that
+llama.cpp's `SamplerInitGrammar` **rejects (returns 0) whenever an `enum` is
+present**. When that happens `NewGrammarSampler` returns `nil` and
+`SampleWithGrammar` **silently falls back to unconstrained sampling** — so the
+schema is *not* enforced at all and the model emits malformed JSON (objects
+closed with `]`, missing required fields). A structure-only schema (no `enum`)
+compiles to a grammar llama.cpp accepts and *is* enforced. Therefore the
+extractor keeps schemas enum-free and enforces the closed vocabulary **in code**:
+unknown entity types are coerced to `Other` (Stage 1), off-vocabulary relations
+are mapped/bucketed (Stage 4), and `GenerateJSON` cleans + repairs + retries as a
+final safety net. If a future kronk fixes enum grammars, the enum can be restored
+in `buildExtractionSchema`/`relationsSchema` to push the constraint back to the
+token level.
 
 Key facts:
 - `model.D` is `map[string]any`. Messages are `[]model.D` of `{"role","content"}`.

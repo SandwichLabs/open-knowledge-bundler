@@ -5,6 +5,55 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] — 2026-06-21
 
+### Fixed — entity over-merge in resolution (+ raw-graph persistence)
+
+The first full §7 benchmark of `cbi extract` regressed vs the v1 baseline
+(answer_correctness 0.520 → 0.405), traced to **entity over-merge**:
+single-linkage clustering at cosine ≥ 0.86 transitively chained a whole type
+(`cancer` ~ `breast cancer` ~ `adenocarcinoma` …) so 120+ distinct cancers
+collapsed into one `disease:cancer` node — gutting Fact Retrieval (0.404 →
+0.285). Resolution now uses **representative-based (leader) clustering** (a
+candidate joins a cluster only if similar to its representative, not any member),
+higher thresholds (auto-merge 0.86 → 0.93; gray band 0.80 → 0.86 routed to the
+LLM adjudicator), and frequency-seeded clusters. The pre-resolution graph is also
+persisted to `<out>/raw-extraction.json`, and `cbi extract --from-raw <file>`
+re-runs resolve→normalize→emit without re-extracting — so resolution is
+re-tunable in minutes instead of hours. Also bounded embedding input so hub
+nodes with hundreds of aliases don't overflow the 512-token embedder.
+
+### Added — `cbi extract`: fully-local, in-process graph extraction
+
+Turns a prose corpus into a resolved knowledge graph with a **local LLM** (kronk /
+llama.cpp, no external server), folding extraction into `cbi` itself. It addresses
+the six weakpoints a benchmarking exercise found in the throwaway `extract_graph.py`
+(see `benchmarks/graphrag-bench/EXTRACTOR_HANDOFF.md`): duplicate entities, runaway
+relation vocabulary, low recall, wrong granularity, brittle JSON parsing, and not
+being self-contained.
+
+Five stages, all in-process:
+- **Ontology bootstrap** — the model proposes a *compact, closed* vocabulary
+  (≤ ~20 entity types, ≤ ~40 directional relations) from a corpus sample, written to
+  the `domain.yaml` `ontology:` block. "Bootstrap, then editable": an automatic
+  bootstrap stops for review; `--bootstrap`/`--yes` continues.
+- **Extraction** — per-chunk entity/relation extraction with the entity `type` and
+  `relation` fields **enum-constrained to the ontology** via kronk's `response_format`
+  → GBNF grammar. This kills vocabulary sprawl at the token level and makes malformed
+  JSON impossible.
+- **Gleaning** (`--glean K`) — extra recall passes per chunk asking only for what was
+  missed, stopping when a round is dry.
+- **Entity resolution** (`--resolve`) — exact-merge by normalized name, then
+  embedding-cluster within each type (in-process EmbeddingGemma), LLM-adjudicating
+  only gray-band pairs; canonicalizes clusters, unions aliases, and remaps edges.
+- **Relation normalization** — rewrites inverse phrasings to the canonical direction,
+  validates/repairs endpoint orientation against declared `source_type -> target_type`,
+  and maps any off-vocabulary drift, with full counts (no silent loss).
+
+Emits the standard cbi ingest shape (`nodes.ndjson`, `edges.ndjson`, `domain.yaml`,
+`vocab.txt`) carrying `aliases`/`provenance`; `--ingest` loads it straight into DuckDB
+in-process (embeddings local too). Default tier `large` (Gemma-4-12B); `--tier`/
+`--model`/`--gpu` select size/backend. Code: `cli/extract/` + `cli/cmd/extract.go`;
+deterministic stages covered by `cli/extract/extract_test.go`.
+
 ### Changed — pruned the CLI surface around portable knowledge bundles
 
 The command surface had accreted three concerns (build, inspect, benchmark) plus a
@@ -15,7 +64,7 @@ hosted-viewer. It is now focused on **building portable knowledge bundles (.duck
 - **`generate okf` → `cbi bundle`** (top-level). `--include-db` is now the **default**
   (a portable bundle includes its database); new `--no-db` emits OKF markdown only.
   Default output dir `okf/` → `bundle/`. The old name is kept as a hidden `okf` alias.
-- **`init` folded in.** `ingest` (and the planned `extract`) now auto-initialize the
+- **`init` folded in.** `ingest` and `extract` now auto-initialize the
   database — schema/index/property-graph creation is idempotent, so no separate step
   is needed. `cbi init` remains as a hidden escape hatch.
 - **Benchmark tools quarantined under `cbi bench`:** `answer`, `eval`, and `convert`
@@ -25,9 +74,9 @@ hosted-viewer. It is now focused on **building portable knowledge bundles (.duck
 - **Root rebranded** from "Chicago Business Intelligence" to a domain-agnostic
   bundle-builder, with a grouped (BUILD / INSPECT / CONSUME / bench / site) help.
 
-Net top-level surface: `extract`¹ · `ingest` · `bundle` · `query` · `graph` ·
-`schema` · `agent`, plus the `bench` and `site` namespaces. (¹extract is the next
-build.)
+Net top-level surface: `extract` · `ingest` · `bundle` · `query` · `graph` ·
+`schema` · `agent`, plus the `bench` and `site` namespaces. (`extract` shipped in
+this same cycle — see its entry above.)
 
 ## [Unreleased] — 2026-06-19
 

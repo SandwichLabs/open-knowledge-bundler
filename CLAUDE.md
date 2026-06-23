@@ -19,12 +19,15 @@ task clean:db                 # Delete the knowledge graph database (prompts)
 ### CLI (after `task build`, run from directory containing domain.yaml)
 
 The surface is focused on building portable knowledge bundles. Top-level groups:
-**BUILD** (extract¹ · ingest · bundle), **INSPECT** (query · graph · schema),
+**BUILD** (extract · ingest · bundle), **INSPECT** (query · graph · schema),
 **CONSUME** (agent), plus quarantined **bench** and **site** namespaces.
-(¹`extract` is the planned in-process LLM extractor — see `benchmarks/graphrag-bench/EXTRACTOR_HANDOFF.md`.)
+(`extract` is the fully-local in-process LLM extractor — corpus → graph; see the
+design record in `benchmarks/graphrag-bench/EXTRACTOR_HANDOFF.md`.)
 
 ```bash
 # BUILD — input → graph → portable bundle (ingest/extract auto-initialize the DB)
+cbi extract --corpus docs/ -o out/ [--bootstrap --glean 1 --resolve --ingest]
+                                                        # Prose corpus → resolved graph with a local LLM (no server)
 cbi ingest --nodes n.ndjson --edges e.ndjson            # NDJSON mode (batched); also --file data.json
 cbi bundle -o bundle/ [--skill] [--no-db] [--mode both|catalog|full] [--node-types ...] [--max-per-type N]
                                                         # Pack a portable bundle (.duckdb + OKF + Skill). --include-db is the DEFAULT; --no-db = markdown only.
@@ -50,6 +53,33 @@ cbi site serve --addr 127.0.0.1:8765                   # Live HTTP API + UI
 
 # cbi init is now hidden — ingest/extract initialize the DB automatically.
 ```
+
+### Graph Extraction (`cbi extract`)
+
+`cbi extract` builds a resolved knowledge graph from a prose corpus using a
+**local LLM** (kronk/llama.cpp, no external server, no API keys) — the front door
+for domains that start as documents rather than structured records. Five
+in-process stages: ontology bootstrap → grammar-constrained extraction → gleaning
+(recall) → entity resolution → relation normalization, then it emits the standard
+cbi ingest shape (`nodes.ndjson`, `edges.ndjson`, `domain.yaml`, `vocab.txt`) and
+can `--ingest` straight into DuckDB.
+
+```bash
+cbi extract --corpus medical.json -o med-graph/                       # auto-bootstrap → stops for ontology review
+cbi extract --corpus medical.json -o med-graph/ --glean 1 --resolve --ingest
+cbi extract --corpus docs/ -o out/ --bootstrap --glean 1 --resolve --ingest --tier large
+```
+
+- **Ontology** (entity types + a closed, directional relation vocabulary) lives in
+  the `domain.yaml` `ontology:` block. *Bootstrap, then editable*: an automatic
+  bootstrap stops so you can review/edit; `--bootstrap`/`--yes` continues now.
+- The entity `type`/`relation` fields are constrained to the ontology in code,
+  not via the schema (kronk v1.28.0 silently ignores `enum` in `response_format`
+  — keep extraction schemas structure-only).
+- `--tier small|medium|large|xl|moe` (default `large` = Gemma-4-12B) or `--model`
+  picks the generator; `--gpu` picks the llama.cpp backend.
+- Code: `cli/extract/` + `cli/cmd/extract.go`; design record in
+  `benchmarks/graphrag-bench/EXTRACTOR_HANDOFF.md`.
 
 ### Benchmarking (`cbi bench eval`)
 

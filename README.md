@@ -120,8 +120,10 @@ The `semantic_text` field is what gets embedded and searched. You can craft it h
 ## CLI reference
 
 ```bash
-# BUILD — input → graph → portable bundle (ingest auto-initializes the DB)
-cbi ingest  --nodes n.ndjson --edges e.ndjson        # Ingest data (batched); also --file data.json
+# BUILD — input → graph → portable bundle (ingest/extract auto-initialize the DB)
+cbi extract --corpus docs/ -o out/ [--bootstrap --glean 1 --resolve --ingest]
+                                                     # Prose corpus → graph with a local LLM (fully in-process)
+cbi ingest  --nodes n.ndjson --edges e.ndjson        # Ingest pre-structured data (batched); also --file data.json
 cbi bundle  -o bundle/ [--skill] [--no-db]           # Pack a portable bundle (.duckdb + OKF + Skill)
 
 # INSPECT — validate the graph
@@ -136,6 +138,41 @@ cbi agent   --bundle ./bundle [--ask "q" --json]     # Chat TUI / one-shot answe
 cbi bench eval|answer|convert ...                    # Evaluate the local agent
 cbi site generate -o dist/ | cbi site serve          # Static site / live HTTP API + D3 viewer
 ```
+
+### Graph extraction from a corpus (`cbi extract`)
+
+`cbi extract` builds a knowledge graph from a prose corpus using a **local LLM**
+(via kronk/llama.cpp) — no external server, no API keys. It is the front door for
+domains that start as documents rather than structured records.
+
+```bash
+# First run: propose an ontology, stop for review, then re-run to extract.
+cbi extract --corpus medical.json -o med-graph/          # auto-bootstrap → review domain.yaml
+cbi extract --corpus medical.json -o med-graph/ --glean 1 --resolve --ingest
+
+# Or bootstrap-and-run in one shot:
+cbi extract --corpus docs/ -o out/ --bootstrap --glean 1 --resolve --ingest --tier large
+```
+
+Five in-process stages:
+
+1. **Ontology bootstrap** — the model proposes a compact, closed vocabulary
+   (entity types + directional relations) from a corpus sample into the
+   `domain.yaml` `ontology:` block. *Bootstrap, then editable*: an automatic
+   bootstrap stops so you can edit it; `--bootstrap`/`--yes` continues immediately.
+2. **Extraction** — per-chunk entity/relation extraction with `type`/`relation`
+   **enum-constrained to the ontology** (kronk `response_format` → GBNF grammar), so
+   the relation vocabulary can't sprawl and the JSON is always valid.
+3. **Gleaning** (`--glean K`) — extra recall passes per chunk for missed facts.
+4. **Entity resolution** (`--resolve`) — exact-merge + per-type embedding clustering
+   (local EmbeddingGemma) with LLM adjudication of borderline pairs; unions aliases
+   and remaps edges to canonical nodes.
+5. **Normalization** — canonicalizes relation direction (rewriting inverses) and
+   validates endpoint types, then emits `nodes.ndjson`/`edges.ndjson`/`domain.yaml`/
+   `vocab.txt`. `--ingest` loads straight into DuckDB in-process.
+
+`--tier small|medium|large|xl|moe` (default `large` = Gemma-4-12B) or `--model <src>`
+picks the generator; `--gpu` picks the llama.cpp backend.
 
 ### OKF bundle export
 
@@ -159,10 +196,11 @@ Layout: `index.md` (root listing, carries `okf_version`), `log.md`, `catalog/`
 per-node concept documents with edges rendered as bundle-relative cross-links.
 
 **Agent skill bundle.** Add `--skill` to emit a `SKILL.md` so the bundle doubles
-as a self-describing [agent skill](https://docs.claude.com/en/docs/claude-code/skills),
-and `--include-db` to copy the DuckDB database and domain config alongside it.
-Combined, the result is fully self-contained: browsable OKF markdown for
-orientation plus a queryable database for precise hybrid retrieval. The generated
+as a self-describing [agent skill](https://docs.claude.com/en/docs/claude-code/skills).
+The DuckDB database and domain config are copied alongside it by default (pass
+`--no-db` to omit them), so the result is fully self-contained: browsable OKF
+markdown for orientation plus a queryable database for precise hybrid retrieval.
+The generated
 `SKILL.md` documents the entity types, the `Nodes_Base`/`Edges_Base` schema, and
 ready-to-run DuckDB SQL + `cbi` query examples.
 
@@ -189,8 +227,8 @@ llama.cpp backend is **Vulkan** (override with `--gpu` or the `processor` config
 `KRONK_PROCESSOR`). Embeddings (EmbeddingGemma, 768-dim) are pinned to the
 bundle's index; if they can't be loaded, `hybrid_search` degrades to lexical-only.
 
-Generate the bundle with `--include-db` (and, for document exploration,
-`--mode both` so per-node concept docs are written).
+Generate the bundle with the database included (the default; don't pass `--no-db`)
+and, for document exploration, `--mode both` so per-node concept docs are written.
 
 ## Architecture
 
