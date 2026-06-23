@@ -196,10 +196,11 @@ Layout: `index.md` (root listing, carries `okf_version`), `log.md`, `catalog/`
 per-node concept documents with edges rendered as bundle-relative cross-links.
 
 **Agent skill bundle.** Add `--skill` to emit a `SKILL.md` so the bundle doubles
-as a self-describing [agent skill](https://docs.claude.com/en/docs/claude-code/skills),
-and `--include-db` to copy the DuckDB database and domain config alongside it.
-Combined, the result is fully self-contained: browsable OKF markdown for
-orientation plus a queryable database for precise hybrid retrieval. The generated
+as a self-describing [agent skill](https://docs.claude.com/en/docs/claude-code/skills).
+The DuckDB database and domain config are copied alongside it by default (pass
+`--no-db` to omit them), so the result is fully self-contained: browsable OKF
+markdown for orientation plus a queryable database for precise hybrid retrieval.
+The generated
 `SKILL.md` documents the entity types, the `Nodes_Base`/`Edges_Base` schema, and
 ready-to-run DuckDB SQL + `cbi` query examples.
 
@@ -226,8 +227,8 @@ llama.cpp backend is **Vulkan** (override with `--gpu` or the `processor` config
 `KRONK_PROCESSOR`). Embeddings (EmbeddingGemma, 768-dim) are pinned to the
 bundle's index; if they can't be loaded, `hybrid_search` degrades to lexical-only.
 
-Generate the bundle with `--include-db` (and, for document exploration,
-`--mode both` so per-node concept docs are written).
+Generate the bundle with the database included (the default; don't pass `--no-db`)
+and, for document exploration, `--mode both` so per-node concept docs are written.
 
 ## Architecture
 

@@ -64,7 +64,7 @@ hosted-viewer. It is now focused on **building portable knowledge bundles (.duck
 - **`generate okf` → `cbi bundle`** (top-level). `--include-db` is now the **default**
   (a portable bundle includes its database); new `--no-db` emits OKF markdown only.
   Default output dir `okf/` → `bundle/`. The old name is kept as a hidden `okf` alias.
-- **`init` folded in.** `ingest` (and the planned `extract`) now auto-initialize the
+- **`init` folded in.** `ingest` and `extract` now auto-initialize the
   database — schema/index/property-graph creation is idempotent, so no separate step
   is needed. `cbi init` remains as a hidden escape hatch.
 - **Benchmark tools quarantined under `cbi bench`:** `answer`, `eval`, and `convert`
@@ -74,9 +74,9 @@ hosted-viewer. It is now focused on **building portable knowledge bundles (.duck
 - **Root rebranded** from "Chicago Business Intelligence" to a domain-agnostic
   bundle-builder, with a grouped (BUILD / INSPECT / CONSUME / bench / site) help.
 
-Net top-level surface: `extract`¹ · `ingest` · `bundle` · `query` · `graph` ·
-`schema` · `agent`, plus the `bench` and `site` namespaces. (¹extract is the next
-build.)
+Net top-level surface: `extract` · `ingest` · `bundle` · `query` · `graph` ·
+`schema` · `agent`, plus the `bench` and `site` namespaces. (`extract` shipped in
+this same cycle — see its entry above.)
 
 ## [Unreleased] — 2026-06-19
 
