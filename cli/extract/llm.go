@@ -19,6 +19,12 @@ import (
 	"github.com/ardanlabs/kronk/sdk/tools/models"
 )
 
+// genContextWindow is the context window the extraction model is loaded with.
+// kronk's autotune defaults to an 8192 cap; the bootstrap prompt (a multi-chunk
+// corpus sample) and large chunks need more, so we set it explicitly (honored
+// over the autotune cap). 32k is plenty for extraction without a huge KV cache.
+const genContextWindow = 32768
+
 // Generator wraps a kronk generation model for grammar-constrained JSON
 // generation. It mirrors agent.Embedder's setup but loads an instruct model and
 // calls Chat. The two can co-reside (generation + embedder) on a host with
@@ -60,7 +66,15 @@ func NewGenerator(ctx context.Context, source string, maxTokens int, log applog.
 	if err := kk.Init(); err != nil {
 		return nil, fmt.Errorf("kronk init: %w", err)
 	}
-	krn, err := kk.New(model.WithModelFiles(mp.ModelFiles), model.WithAutoTune(true))
+	// Set an explicit context window. kronk's autotune otherwise caps context at
+	// 8192, which the ontology-bootstrap prompt (a multi-chunk corpus sample)
+	// overflows. 32k comfortably fits the bootstrap sample plus per-chunk
+	// extraction, without the KV-cache cost of the model's full 128k/256k.
+	krn, err := kk.New(
+		model.WithModelFiles(mp.ModelFiles),
+		model.WithAutoTune(true),
+		model.WithContextWindow(genContextWindow),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("loading model: %w", err)
 	}
