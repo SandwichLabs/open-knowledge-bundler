@@ -89,7 +89,18 @@ func Resolve(ctx context.Context, gen *Generator, emb Embedder, g *Graph, thresh
 		byType[t] = append(byType[t], k)
 	}
 
-	uf := newUnionFind(keys)
+	// Leader (representative-based) clustering within each type. A candidate
+	// joins an existing cluster only if it is similar to that cluster's
+	// REPRESENTATIVE — not merely to some member — which prevents the
+	// single-linkage chaining that previously collapsed a whole type (e.g.
+	// cancer ~ breast cancer ~ adenocarcinoma) into one node. Pairs in the gray
+	// band [grayLo, threshold) are settled by the LLM adjudicator, which rejects
+	// type-vs-subtype merges.
+	type leaderCluster struct {
+		repKey  string
+		members []string
+	}
+	var groups [][]string
 	adjCalls := 0
 	if emb != nil {
 		typeNames := make([]string, 0, len(byType))
@@ -99,39 +110,50 @@ func Resolve(ctx context.Context, gen *Generator, emb Embedder, g *Graph, thresh
 		sort.Strings(typeNames)
 
 		for _, t := range typeNames {
-			members := byType[t]
-			for i := 0; i < len(members); i++ {
-				for j := i + 1; j < len(members); j++ {
-					a, b := members[i], members[j]
-					if uf.find(a) == uf.find(b) {
-						continue
-					}
-					sim := cosine(vecs[a], vecs[b])
-					switch {
-					case sim >= threshold:
-						uf.union(a, b)
-					case sim >= grayLo:
-						if maxAdjudicate > 0 && adjCalls >= maxAdjudicate {
-							continue // cap reached; leave as separate
-						}
-						adjCalls++
-						if same, err := adjudicate(ctx, gen, g.Entities[a].Name, g.Entities[b].Name); err == nil && same {
-							uf.union(a, b)
-						}
+			members := append([]string(nil), byType[t]...)
+			// Seed clusters with higher-frequency (more canonical) entities first.
+			sort.SliceStable(members, func(i, j int) bool {
+				ci, cj := len(g.Entities[members[i]].Chunks), len(g.Entities[members[j]].Chunks)
+				if ci != cj {
+					return ci > cj
+				}
+				return members[i] < members[j]
+			})
+
+			var clusters []*leaderCluster
+			for _, m := range members {
+				best, bestSim := -1, -1.0
+				for ci, c := range clusters {
+					if s := cosine(vecs[m], vecs[c.repKey]); s > bestSim {
+						best, bestSim = ci, s
 					}
 				}
+				switch {
+				case best >= 0 && bestSim >= threshold:
+					clusters[best].members = append(clusters[best].members, m)
+				case best >= 0 && bestSim >= grayLo && (maxAdjudicate == 0 || adjCalls < maxAdjudicate):
+					adjCalls++
+					if same, err := adjudicate(ctx, gen, g.Entities[m].Name, g.Entities[clusters[best].repKey].Name); err == nil && same {
+						clusters[best].members = append(clusters[best].members, m)
+					} else {
+						clusters = append(clusters, &leaderCluster{repKey: m, members: []string{m}})
+					}
+				default:
+					clusters = append(clusters, &leaderCluster{repKey: m, members: []string{m}})
+				}
 			}
+			for _, c := range clusters {
+				groups = append(groups, c.members)
+			}
+		}
+	} else {
+		// No embedder: exact-merge only (already done in g) — each entity its own node.
+		for _, k := range keys {
+			groups = append(groups, []string{k})
 		}
 	}
 	if maxAdjudicate > 0 && adjCalls >= maxAdjudicate {
 		progress("  ! entity-resolution adjudication hit the cap of %d calls; remaining gray-band pairs left unmerged", maxAdjudicate)
-	}
-
-	// Build clusters and canonicalize.
-	clusters := map[string][]string{}
-	for _, k := range keys {
-		root := uf.find(k)
-		clusters[root] = append(clusters[root], k)
 	}
 
 	res := &Resolved{NodeByID: map[string]*ResolvedNode{}, Adjudicate: adjCalls}
@@ -139,15 +161,8 @@ func Resolve(ctx context.Context, gen *Generator, emb Embedder, g *Graph, thresh
 	usedID := map[string]bool{}
 	merged := 0
 
-	// Deterministic cluster order.
-	roots := make([]string, 0, len(clusters))
-	for r := range clusters {
-		roots = append(roots, r)
-	}
-	sort.Strings(roots)
-
-	for _, r := range roots {
-		members := clusters[r]
+	for _, members := range groups {
+		members = append([]string(nil), members...)
 		sort.Strings(members)
 		rep := pickRepresentative(g, members)
 		repEnt := g.Entities[rep]
@@ -266,31 +281,6 @@ func mkNodeID(typ, name string, used map[string]bool) string {
 }
 
 // --- small helpers ---
-
-type unionFind struct{ parent map[string]string }
-
-func newUnionFind(keys []string) *unionFind {
-	uf := &unionFind{parent: make(map[string]string, len(keys))}
-	for _, k := range keys {
-		uf.parent[k] = k
-	}
-	return uf
-}
-
-func (uf *unionFind) find(x string) string {
-	for uf.parent[x] != x {
-		uf.parent[x] = uf.parent[uf.parent[x]]
-		x = uf.parent[x]
-	}
-	return x
-}
-
-func (uf *unionFind) union(a, b string) {
-	ra, rb := uf.find(a), uf.find(b)
-	if ra != rb {
-		uf.parent[ra] = rb
-	}
-}
 
 func cosine(a, b []float32) float64 {
 	if len(a) == 0 || len(a) != len(b) {

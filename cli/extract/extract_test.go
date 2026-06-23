@@ -114,6 +114,64 @@ func TestResolveExactMerge(t *testing.T) {
 	}
 }
 
+// fakeEmbedder returns a fixed vector per entity name (for resolution tests).
+type fakeEmbedder struct{ vecs map[string][]float32 }
+
+func (f fakeEmbedder) Embed(_ context.Context, text string) ([]float32, error) {
+	if v, ok := f.vecs[text]; ok {
+		return v, nil
+	}
+	return []float32{0, 0, 1}, nil
+}
+
+// TestResolveLeaderClustering verifies representative-based clustering merges an
+// entity that is similar to a cluster's representative, but does NOT merge one
+// that is dissimilar to the representative — the anti-chaining fix. The
+// higher-frequency entity seeds the cluster and becomes the canonical name. With
+// no gray-band pairs here, the generator is never called (nil is safe).
+func TestResolveLeaderClustering(t *testing.T) {
+	g := NewGraph()
+	// "cancer" is the frequent generic (seed); "ca" is a near-identical synonym
+	// (auto-merges to the rep); "metastasis" is unrelated (must stay separate).
+	for c := 0; c < 3; c++ {
+		g.AddEntity("cancer", "Disease", c)
+	}
+	g.AddEntity("ca", "Disease", 0)
+	g.AddEntity("metastasis", "Disease", 1)
+
+	emb := fakeEmbedder{vecs: map[string][]float32{
+		"cancer":     {1, 0, 0},
+		"ca":         {0.98, 0.2, 0}, // cosine vs cancer ≈ 0.98 (>= 0.93 → auto-merge)
+		"metastasis": {0, 1, 0},      // cosine vs cancer = 0 (< gray-lo → separate)
+	}}
+
+	res, err := Resolve(context.Background(), nil, emb, g, 0.93, 0.86, 0, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Nodes) != 2 {
+		t.Fatalf("expected 2 nodes (cancer+ca merged, metastasis separate), got %d: %+v", len(res.Nodes), res.Nodes)
+	}
+	var cancer *ResolvedNode
+	for i := range res.Nodes {
+		if res.Nodes[i].Name == "cancer" {
+			cancer = &res.Nodes[i]
+		}
+	}
+	if cancer == nil {
+		t.Fatal("expected the high-frequency 'cancer' to be the canonical name")
+	}
+	found := false
+	for _, a := range cancer.Aliases {
+		if a == "ca" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected 'ca' merged as an alias of cancer, got aliases %v", cancer.Aliases)
+	}
+}
+
 // TestNormalizeDirectionAndInverse checks inverse rewriting + endpoint-type
 // orientation, which is the relation-vocabulary fix (#2).
 func TestNormalizeDirectionAndInverse(t *testing.T) {

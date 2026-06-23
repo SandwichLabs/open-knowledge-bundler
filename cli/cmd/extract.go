@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/ardanlabs/kronk/sdk/kronk/applog"
@@ -32,6 +33,7 @@ var (
 	extractYes        bool
 	extractTime       string
 	extractMaxTokens  int
+	extractFromRaw    string
 )
 
 var extractCmd = &cobra.Command{
@@ -58,6 +60,10 @@ func runExtract(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 	start := time.Now()
 
+	if extractFromRaw == "" && extractCorpus == "" {
+		return fmt.Errorf("provide --corpus (or --from-raw to re-resolve a saved extraction)")
+	}
+
 	configPath := cfgFile
 	if configPath == "" {
 		configPath = "domain.yaml"
@@ -73,16 +79,19 @@ func runExtract(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// 2. Load + chunk the corpus.
-	corpus, err := extract.LoadCorpus(extractCorpus)
-	if err != nil {
-		return fmt.Errorf("loading corpus: %w", err)
+	// 2. Load + chunk the corpus (skipped when resolving from a saved raw graph).
+	var chunks []extract.Chunk
+	if extractFromRaw == "" {
+		corpus, err := extract.LoadCorpus(extractCorpus)
+		if err != nil {
+			return fmt.Errorf("loading corpus: %w", err)
+		}
+		if extractMaxChars > 0 && len(corpus) > extractMaxChars {
+			corpus = corpus[:extractMaxChars]
+		}
+		chunks = extract.ChunkText(corpus, extractChunkChars, extractOverlap)
+		fmt.Fprintf(os.Stderr, "corpus %d chars -> %d chunks\n", len(corpus), len(chunks))
 	}
-	if extractMaxChars > 0 && len(corpus) > extractMaxChars {
-		corpus = corpus[:extractMaxChars]
-	}
-	chunks := extract.ChunkText(corpus, extractChunkChars, extractOverlap)
-	fmt.Fprintf(os.Stderr, "corpus %d chars -> %d chunks\n", len(corpus), len(chunks))
 
 	// 3. Resolve model sources + processor backend (reuse the agent's config).
 	acfg, err := agent.LoadConfig(false, false)
@@ -116,27 +125,35 @@ func runExtract(cmd *cobra.Command, args []string) error {
 
 	progress := func(format string, a ...any) { fmt.Fprintf(os.Stderr, format+"\n", a...) }
 
-	// Stage 0 — ontology bootstrap (if missing or requested).
-	autoBootstrap := cfg.Ontology == nil || len(cfg.Ontology.Relations) == 0
-	if extractBootstrap || autoBootstrap {
-		fmt.Fprintln(os.Stderr, "bootstrapping ontology from a corpus sample ...")
-		ont, err := extract.Bootstrap(ctx, gen, chunks, extractSampleN)
-		if err != nil {
-			return err
+	// Stage 0 — ontology bootstrap (if missing or requested). Unavailable when
+	// resolving from a saved raw graph (no corpus sample) — the ontology must
+	// already be in the config.
+	if extractFromRaw != "" {
+		if cfg.Ontology == nil || len(cfg.Ontology.Relations) == 0 {
+			return fmt.Errorf("--from-raw requires an ontology in %s (run a normal extraction first)", configPath)
 		}
-		cfg.Ontology = ont
-		if err := extract.SaveConfig(configPath, cfg); err != nil {
-			return err
-		}
-		fmt.Fprintf(os.Stderr, "ontology: %d entity types, %d relations -> %s\n",
-			len(ont.EntityTypes), len(ont.Relations), configPath)
+	} else {
+		autoBootstrap := cfg.Ontology == nil || len(cfg.Ontology.Relations) == 0
+		if extractBootstrap || autoBootstrap {
+			fmt.Fprintln(os.Stderr, "bootstrapping ontology from a corpus sample ...")
+			ont, err := extract.Bootstrap(ctx, gen, chunks, extractSampleN)
+			if err != nil {
+				return err
+			}
+			cfg.Ontology = ont
+			if err := extract.SaveConfig(configPath, cfg); err != nil {
+				return err
+			}
+			fmt.Fprintf(os.Stderr, "ontology: %d entity types, %d relations -> %s\n",
+				len(ont.EntityTypes), len(ont.Relations), configPath)
 
-		// "Bootstrap, then editable": stop after an automatic bootstrap so the
-		// user can review/edit, unless they explicitly asked to bootstrap-and-run
-		// (--bootstrap) or pass --yes.
-		if autoBootstrap && !extractBootstrap && !extractYes {
-			fmt.Fprintf(os.Stderr, "\nReview and edit the ontology in %s, then re-run to extract (or pass --yes to continue now).\n", configPath)
-			return nil
+			// "Bootstrap, then editable": stop after an automatic bootstrap so the
+			// user can review/edit, unless they explicitly asked to bootstrap-and-run
+			// (--bootstrap) or pass --yes.
+			if autoBootstrap && !extractBootstrap && !extractYes {
+				fmt.Fprintf(os.Stderr, "\nReview and edit the ontology in %s, then re-run to extract (or pass --yes to continue now).\n", configPath)
+				return nil
+			}
 		}
 	}
 	ont := cfg.Ontology
@@ -157,11 +174,31 @@ func runExtract(cmd *cobra.Command, args []string) error {
 		emb = e
 	}
 
-	// Stage 1–2 — extract + glean.
-	fmt.Fprintln(os.Stderr, "extracting entities + relations ...")
-	graph, err := extract.Extract(ctx, gen, ont, chunks, extractGlean, progress)
-	if err != nil {
-		return err
+	// Stage 1–2 — extract + glean (or load a previously-saved raw graph).
+	var graph *extract.Graph
+	if extractFromRaw != "" {
+		fmt.Fprintf(os.Stderr, "loading raw extraction from %s ...\n", extractFromRaw)
+		graph, err = extract.LoadGraph(extractFromRaw)
+		if err != nil {
+			return fmt.Errorf("loading raw extraction: %w", err)
+		}
+		fmt.Fprintf(os.Stderr, "  %d entities, %d relations loaded\n", len(graph.Entities), len(graph.Relations))
+	} else {
+		fmt.Fprintln(os.Stderr, "extracting entities + relations ...")
+		graph, err = extract.Extract(ctx, gen, ont, chunks, extractGlean, progress)
+		if err != nil {
+			return err
+		}
+		// Persist the pre-resolution graph so resolution can be re-tuned later
+		// (--from-raw) without re-running the expensive extraction stage.
+		if err := os.MkdirAll(extractOut, 0o755); err != nil {
+			return err
+		}
+		rawPath := filepath.Join(extractOut, "raw-extraction.json")
+		if err := graph.Save(rawPath); err != nil {
+			return fmt.Errorf("saving raw extraction: %w", err)
+		}
+		fmt.Fprintf(os.Stderr, "saved raw extraction -> %s\n", rawPath)
 	}
 
 	// Stage 3 — entity resolution (emb==nil => exact-merge only).
@@ -233,8 +270,8 @@ func init() {
 	f.IntVar(&extractGlean, "glean", 0, "extra recall passes per chunk (0 = off)")
 	f.IntVar(&extractMaxChars, "max-chars", 0, "cap corpus characters (0 = all)")
 	f.BoolVar(&extractResolve, "resolve", false, "enable embedding-cluster entity resolution (else exact-merge only)")
-	f.Float64Var(&extractThreshold, "resolve-threshold", 0.86, "cosine >= this auto-merges entities of the same type")
-	f.Float64Var(&extractGrayLo, "resolve-gray-lo", 0.80, "cosine in [gray-lo, threshold) is LLM-adjudicated")
+	f.Float64Var(&extractThreshold, "resolve-threshold", 0.93, "cosine >= this auto-merges entities of the same type (vs the cluster representative)")
+	f.Float64Var(&extractGrayLo, "resolve-gray-lo", 0.86, "cosine in [gray-lo, threshold) is LLM-adjudicated")
 	f.IntVar(&extractMaxAdjud, "max-adjudicate", 400, "cap on LLM adjudication/mapping calls (0 = unlimited)")
 	f.StringVar(&extractTier, "tier", "large", "model size tier (small|medium|large|xl|moe)")
 	f.StringVar(&extractModel, "model", "", "override the LLM with an explicit kronk model source")
@@ -243,6 +280,6 @@ func init() {
 	f.BoolVar(&extractYes, "yes", false, "continue without stopping for ontology review after an auto-bootstrap")
 	f.StringVar(&extractTime, "time", time.Now().Format("2006-01-02"), "ingestion timestamp (YYYY-MM-DD), with --ingest")
 	f.IntVar(&extractMaxTokens, "max-tokens", 8192, "max output tokens per LLM call")
-	_ = extractCmd.MarkFlagRequired("corpus")
+	f.StringVar(&extractFromRaw, "from-raw", "", "skip extraction; resolve+normalize+emit from a saved raw-extraction.json (re-tune resolution without re-extracting)")
 	rootCmd.AddCommand(extractCmd)
 }

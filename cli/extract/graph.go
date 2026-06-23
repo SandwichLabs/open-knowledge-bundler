@@ -1,7 +1,10 @@
 package extract
 
 import (
+	"encoding/json"
+	"os"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -89,6 +92,110 @@ func (g *Graph) AddRelation(source, relation, target string, chunkID int) {
 // EntityByName resolves a surface name to its accumulated entity (post-merge).
 func (g *Graph) EntityByName(name string) *Entity {
 	return g.Entities[normalizeName(name)]
+}
+
+// rawGraph is the JSON-serializable form of a pre-resolution Graph (sets are
+// flattened to sorted slices). Persisting it lets resolution be re-run/re-tuned
+// later without re-extracting from the corpus (the expensive stage).
+type rawGraph struct {
+	Entities  []rawEntity   `json:"entities"`
+	Relations []rawRelation `json:"relations"`
+}
+
+type rawEntity struct {
+	Name    string   `json:"name"`
+	Type    string   `json:"type"`
+	Aliases []string `json:"aliases,omitempty"`
+	Chunks  []int    `json:"chunks,omitempty"`
+}
+
+type rawRelation struct {
+	Source   string `json:"source"`
+	Relation string `json:"relation"`
+	Target   string `json:"target"`
+	Chunks   []int  `json:"chunks,omitempty"`
+}
+
+// Save writes the accumulated (pre-resolution) graph to path as JSON.
+func (g *Graph) Save(path string) error {
+	var rg rawGraph
+	ekeys := make([]string, 0, len(g.Entities))
+	for k := range g.Entities {
+		ekeys = append(ekeys, k)
+	}
+	sort.Strings(ekeys)
+	for _, k := range ekeys {
+		e := g.Entities[k]
+		rg.Entities = append(rg.Entities, rawEntity{
+			Name: e.Name, Type: e.Type, Aliases: setToSorted(e.Aliases), Chunks: intsToSorted(e.Chunks),
+		})
+	}
+	rkeys := make([]string, 0, len(g.Relations))
+	for k := range g.Relations {
+		rkeys = append(rkeys, k)
+	}
+	sort.Strings(rkeys)
+	for _, k := range rkeys {
+		r := g.Relations[k]
+		rg.Relations = append(rg.Relations, rawRelation{
+			Source: r.Source, Relation: r.Relation, Target: r.Target, Chunks: intsToSorted(r.Chunks),
+		})
+	}
+	out, err := json.MarshalIndent(rg, "", " ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, out, 0o644)
+}
+
+// LoadGraph reconstructs a Graph from a file written by Save, preserving the
+// same entity/relation keys so resolution behaves identically.
+func LoadGraph(path string) (*Graph, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var rg rawGraph
+	if err := json.Unmarshal(data, &rg); err != nil {
+		return nil, err
+	}
+	g := NewGraph()
+	for _, e := range rg.Entities {
+		ent := &Entity{Name: e.Name, Type: orOther(e.Type), Aliases: map[string]bool{}, Chunks: map[int]bool{}}
+		for _, a := range e.Aliases {
+			ent.Aliases[a] = true
+		}
+		for _, c := range e.Chunks {
+			ent.Chunks[c] = true
+		}
+		g.Entities[normalizeName(e.Name)] = ent
+	}
+	for _, r := range rg.Relations {
+		rr := &Relation{Source: r.Source, Relation: r.Relation, Target: r.Target, Chunks: map[int]bool{}}
+		for _, c := range r.Chunks {
+			rr.Chunks[c] = true
+		}
+		g.Relations[normalizeName(r.Source)+"|"+r.Relation+"|"+normalizeName(r.Target)] = rr
+	}
+	return g, nil
+}
+
+func setToSorted(m map[string]bool) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func intsToSorted(m map[int]bool) []int {
+	out := make([]int, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Ints(out)
+	return out
 }
 
 func orOther(typ string) string {
