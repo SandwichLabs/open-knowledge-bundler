@@ -1,26 +1,38 @@
 # `cbi extract` — Fully-Local Graph Extraction Pipeline (Build Handoff)
 
-**Status:** ✅ **built + benchmarked** (2026-06-21/22). Implemented in
+**Status:** ✅ **built + benchmarked + validated** (2026-06-21/23). Implemented in
 `cli/extract/` + `cli/cmd/extract.go`, registered in the BUILD group. All five
-stages run in-process on the 12B (Vulkan). The full medical corpus was extracted
-(192 chunks → 3174 raw entities → 1778 resolved nodes, 3884 edges, **20 relation
-types vs v1's ~150**) and the §7 32-Q judge was run.
+stages run fully in-process on the 12B (Vulkan), no external LLM server.
 
-**§7 result (v1 → v2):** answer_correctness fell **0.520 → 0.405** — a
-*regression*, traced to entity **over-merge**: single-linkage clustering chained
-120+ distinct cancers into one `disease:cancer` node, gutting Fact Retrieval
-(0.404 → 0.285). The structural weakpoints (#2 vocab, #5 parsing) were fixed but
-resolution introduced a worse one. **Fix shipped** (commit after the run):
-representative-based (leader) clustering with higher thresholds + adjudication,
-and the pre-resolution graph is now persisted (`raw-extraction.json` +
-`--from-raw`) so resolution is re-tunable in minutes without re-extracting. A
-re-extraction with the fixed resolver is the next validation step.
+**§7 result — the new local extractor beats both the Qwen-35B-built v1 graph and
+frontier Sonnet on the same 32-Q judge.** answer_correctness: v1 **0.520** →
+first run (over-merged) **0.405** → fixed resolver **0.581**. The regression
+traced to entity **over-merge** (single-linkage clustering chained 120+ distinct
+cancers into one `disease:cancer` node, gutting Fact Retrieval 0.404 → 0.285);
+the fix — **representative-based (leader) clustering** with higher thresholds +
+LLM adjudication — restored granularity (349-alias hub → 3 aliases; 81 distinct
+cancer subtypes preserved) and lifted Fact Retrieval to **0.452**, topping both
+v1 (0.404) and Sonnet (0.429). The pre-resolution graph is persisted
+(`raw-extraction.json` + `--from-raw`) so resolution re-tunes in minutes (28s)
+without re-extracting. Thesis flips: a better graph lifted a small local answerer
+above frontier.
 
 | Run | nodes | edges | rel-types | AC overall | Fact | Complex | Summ | Creative |
 |-----|------:|------:|----------:|-----------:|-----:|--------:|-----:|---------:|
-| v1 (extract_graph.py) | — | — | ~150 | **0.520** | 0.404 | 0.590 | 0.565 | 0.520 |
-| v2 (cbi extract, over-merged) | 1778 | 3884 | 20 | **0.405** | 0.285 | 0.423 | 0.408 | 0.504 |
-| v2b (leader-clustering fix) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| v1 (extract_graph.py, Qwen-35B/HTTP) | — | — | ~150 | 0.520 | 0.404 | 0.590 | 0.565 | 0.520 |
+| Sonnet over the v1 bundle | — | — | ~150 | 0.491 | 0.429 | 0.453 | 0.517 | 0.563 |
+| v2 (cbi extract, over-merged) | 1778 | 3884 | 20 | 0.405 | 0.285 | 0.423 | 0.408 | 0.504 |
+| **v2b (cbi extract, leader-clustering fix)** | **2990** | **6593** | **21** | **0.581** | **0.452** | **0.586** | **0.635** | **0.650** |
+
+Settings for v2b: `--bootstrap --yes --glean 1 --resolve --ingest --tier large
+--gpu vulkan --max-tokens 3072` (the 3072 cap eliminated the long-tail per-call
+deadlines and cut pace ~6.3 → ~4.1 min/chunk). Artifacts in `/tmp/grbench/`:
+`med-v3/` (graph + `raw-extraction.json`), `med-answers-v3.json`,
+`med-judge-v3.json`. NB: answering (12B@128k agent) and the resident Qwen-35B
+judge **cannot co-reside on this GPU** (Vulkan `DeviceLostError`) — run the
+answering with `:8080` stopped, then restart it for judging.
+
+Build map:
 
 Build map:
 
