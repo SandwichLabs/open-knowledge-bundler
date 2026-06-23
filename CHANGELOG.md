@@ -5,6 +5,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] — 2026-06-21
 
+### Fixed — entity over-merge in resolution (+ raw-graph persistence)
+
+The first full §7 benchmark of `cbi extract` regressed vs the v1 baseline
+(answer_correctness 0.520 → 0.405), traced to **entity over-merge**:
+single-linkage clustering at cosine ≥ 0.86 transitively chained a whole type
+(`cancer` ~ `breast cancer` ~ `adenocarcinoma` …) so 120+ distinct cancers
+collapsed into one `disease:cancer` node — gutting Fact Retrieval (0.404 →
+0.285). Resolution now uses **representative-based (leader) clustering** (a
+candidate joins a cluster only if similar to its representative, not any member),
+higher thresholds (auto-merge 0.86 → 0.93; gray band 0.80 → 0.86 routed to the
+LLM adjudicator), and frequency-seeded clusters. The pre-resolution graph is also
+persisted to `<out>/raw-extraction.json`, and `cbi extract --from-raw <file>`
+re-runs resolve→normalize→emit without re-extracting — so resolution is
+re-tunable in minutes instead of hours. Also bounded embedding input so hub
+nodes with hundreds of aliases don't overflow the 512-token embedder.
+
 ### Added — `cbi extract`: fully-local, in-process graph extraction
 
 Turns a prose corpus into a resolved knowledge graph with a **local LLM** (kronk /

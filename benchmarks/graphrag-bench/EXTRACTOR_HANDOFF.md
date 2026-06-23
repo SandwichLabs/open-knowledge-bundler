@@ -1,12 +1,28 @@
 # `cbi extract` — Fully-Local Graph Extraction Pipeline (Build Handoff)
 
-**Status:** ✅ **built** (2026-06-21). Implemented in `cli/extract/` +
-`cli/cmd/extract.go`, registered in the BUILD group. All five stages, the
-kronk grammar integration, and the deterministic helpers are in place;
-`go build/vet/test` pass and a live bootstrap→extract→resolve→ingest smoke run
-against the medical corpus works in-process on the 12B (Vulkan). What remains is
-the §7 answer-quality regression (re-run the 32-Q judge vs the v1 baselines).
-This document is retained as the design record. Build map:
+**Status:** ✅ **built + benchmarked** (2026-06-21/22). Implemented in
+`cli/extract/` + `cli/cmd/extract.go`, registered in the BUILD group. All five
+stages run in-process on the 12B (Vulkan). The full medical corpus was extracted
+(192 chunks → 3174 raw entities → 1778 resolved nodes, 3884 edges, **20 relation
+types vs v1's ~150**) and the §7 32-Q judge was run.
+
+**§7 result (v1 → v2):** answer_correctness fell **0.520 → 0.405** — a
+*regression*, traced to entity **over-merge**: single-linkage clustering chained
+120+ distinct cancers into one `disease:cancer` node, gutting Fact Retrieval
+(0.404 → 0.285). The structural weakpoints (#2 vocab, #5 parsing) were fixed but
+resolution introduced a worse one. **Fix shipped** (commit after the run):
+representative-based (leader) clustering with higher thresholds + adjudication,
+and the pre-resolution graph is now persisted (`raw-extraction.json` +
+`--from-raw`) so resolution is re-tunable in minutes without re-extracting. A
+re-extraction with the fixed resolver is the next validation step.
+
+| Run | nodes | edges | rel-types | AC overall | Fact | Complex | Summ | Creative |
+|-----|------:|------:|----------:|-----------:|-----:|--------:|-----:|---------:|
+| v1 (extract_graph.py) | — | — | ~150 | **0.520** | 0.404 | 0.590 | 0.565 | 0.520 |
+| v2 (cbi extract, over-merged) | 1778 | 3884 | 20 | **0.405** | 0.285 | 0.423 | 0.408 | 0.504 |
+| v2b (leader-clustering fix) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+
+Build map:
 
 | Stage | File | Status |
 |-------|------|--------|
