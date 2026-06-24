@@ -33,7 +33,26 @@ var (
 	errStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
 	statusStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("0")).Background(lipgloss.Color("6")).Padding(0, 1)
 	warnStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("0")).Background(lipgloss.Color("3")).Padding(0, 1)
+
+	// reasoning is collapsed by default; the cyan affordance toggles it and the
+	// expanded body renders in a plain readable foreground (deliberately not faint).
+	reasoningHintStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
+	reasoningStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("7"))
 )
+
+// blockKind distinguishes pre-rendered transcript lines from raw reasoning, which
+// is re-rendered on every refresh so it can be collapsed or expanded in place.
+type blockKind int
+
+const (
+	blockText      blockKind = iota // text is already styled/rendered; shown verbatim
+	blockReasoning                  // text is raw reasoning; rendered per reasoningExpanded
+)
+
+type block struct {
+	kind blockKind
+	text string
+}
 
 type tuiModel struct {
 	runner *Runner
@@ -47,10 +66,12 @@ type tuiModel struct {
 	width, height int
 	ready         bool
 
-	blocks    []string        // finalized transcript blocks
+	blocks    []block         // finalized transcript blocks
 	live      strings.Builder // in-progress assistant markdown (raw)
-	reasoning strings.Builder // in-progress reasoning (shown faintly)
+	reasoning strings.Builder // in-progress reasoning (buffered until flushed)
 	streaming bool
+
+	reasoningExpanded bool // ctrl+r toggles reasoning blocks open/closed
 
 	info string // static status info (model/embed)
 	warn string // optional warning (e.g. lexical-only)
@@ -60,7 +81,7 @@ type tuiModel struct {
 // warning banner (empty if none).
 func RunTUI(ctx context.Context, runner *Runner, info, warn string) error {
 	ti := textinput.New()
-	ti.Placeholder = "Ask about the graph…  (Ctrl+C to quit)"
+	ti.Placeholder = "Ask about the graph…  (ctrl+r reasoning · ctrl+c quit)"
 	ti.Prompt = "› "
 	ti.Focus()
 	ti.CharLimit = 4000
@@ -100,6 +121,10 @@ func (m *tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.Type {
 		case tea.KeyCtrlC, tea.KeyEsc:
 			return m, tea.Quit
+		case tea.KeyCtrlR:
+			m.reasoningExpanded = !m.reasoningExpanded
+			m.refresh()
+			return m, nil
 		case tea.KeyEnter:
 			if m.streaming {
 				return m, nil // ignore input mid-turn
@@ -123,12 +148,12 @@ func (m *tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case streamToolMsg:
 		m.flushReasoning()
-		m.blocks = append(m.blocks, toolStyle.Render(fmt.Sprintf("→ %s %s", msg.name, oneLine(msg.input, 160))))
+		m.appendText(toolStyle.Render(fmt.Sprintf("→ %s %s", msg.name, oneLine(msg.input, 160))))
 		m.refresh()
 		return m, m.waitForActivity()
 
 	case streamToolResultMsg:
-		m.blocks = append(m.blocks, toolStyle.Render(fmt.Sprintf("  ✓ %s returned", msg.name)))
+		m.appendText(toolStyle.Render(fmt.Sprintf("  ✓ %s returned", msg.name)))
 		m.refresh()
 		return m, m.waitForActivity()
 
@@ -148,7 +173,7 @@ func (m *tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *tuiModel) submit(prompt string) tea.Cmd {
-	m.blocks = append(m.blocks, userStyle.Render("you› ")+prompt)
+	m.appendText(userStyle.Render("you› ") + prompt)
 	m.input.Reset()
 	m.streaming = true
 
@@ -170,21 +195,47 @@ func (m *tuiModel) submit(prompt string) tea.Cmd {
 func (m *tuiModel) finishTurn(err error) {
 	m.flushReasoning()
 	if s := m.live.String(); strings.TrimSpace(s) != "" {
-		m.blocks = append(m.blocks, m.renderMarkdown(s))
+		m.appendText(m.renderMarkdown(s))
 	}
 	m.live.Reset()
 	if err != nil {
-		m.blocks = append(m.blocks, errStyle.Render("error: "+err.Error()))
+		m.appendText(errStyle.Render("error: " + err.Error()))
 	}
 	m.streaming = false
 	m.refresh()
 }
 
+func (m *tuiModel) appendText(s string) {
+	m.blocks = append(m.blocks, block{kind: blockText, text: s})
+}
+
+func (m *tuiModel) hasReasoning() bool {
+	for _, b := range m.blocks {
+		if b.kind == blockReasoning {
+			return true
+		}
+	}
+	return false
+}
+
+// flushReasoning moves the buffered reasoning into the transcript as a collapsible
+// block (raw text; rendered per reasoningExpanded at refresh time).
 func (m *tuiModel) flushReasoning() {
 	if s := strings.TrimSpace(m.reasoning.String()); s != "" {
-		m.blocks = append(m.blocks, toolStyle.Render("("+oneLine(s, 400)+")"))
+		m.blocks = append(m.blocks, block{kind: blockReasoning, text: s})
 	}
 	m.reasoning.Reset()
+}
+
+// renderReasoning shows a compact, readable affordance when collapsed and the full
+// wrapped reasoning (not faint) when expanded.
+func (m *tuiModel) renderReasoning(s string) string {
+	if !m.reasoningExpanded {
+		return reasoningHintStyle.Render("▸ reasoning · ctrl+r to expand")
+	}
+	wrap := max(20, m.width-2)
+	body := reasoningStyle.Width(wrap).Render(s)
+	return reasoningHintStyle.Render("▾ reasoning · ctrl+r to collapse") + "\n" + body
 }
 
 func (m *tuiModel) renderMarkdown(s string) string {
@@ -204,7 +255,13 @@ func (m *tuiModel) refresh() {
 		return
 	}
 	parts := make([]string, 0, len(m.blocks)+1)
-	parts = append(parts, m.blocks...)
+	for _, b := range m.blocks {
+		if b.kind == blockReasoning {
+			parts = append(parts, m.renderReasoning(b.text))
+		} else {
+			parts = append(parts, b.text)
+		}
+	}
 	if s := m.live.String(); s != "" {
 		parts = append(parts, assistStyle.Render(s)) // live text as plain (markdown rendered on completion)
 	}
@@ -256,6 +313,13 @@ func (m *tuiModel) View() string {
 		status += " · thinking…"
 	} else {
 		status += " · ready"
+	}
+	if m.hasReasoning() {
+		if m.reasoningExpanded {
+			status += " · ctrl+r hide reasoning"
+		} else {
+			status += " · ctrl+r show reasoning"
+		}
 	}
 	b.WriteString(statusStyle.Width(m.width).Render(status))
 	if m.warn != "" {
