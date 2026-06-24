@@ -10,12 +10,20 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sandwich-labs/open-knowledge-bundler/cli/agent"
 	"github.com/sandwich-labs/open-knowledge-bundler/cli/domain"
 	"github.com/sandwich-labs/open-knowledge-bundler/cli/embed"
 	"github.com/sandwich-labs/open-knowledge-bundler/cli/store"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
+
+// nodeEmbedder is the minimal embedding surface ingest needs. Both the local
+// in-process kronk embedder (agent.Embedder) and the HTTP endpoint client
+// (embed.Client) satisfy it.
+type nodeEmbedder interface {
+	Embed(ctx context.Context, text string) ([]float32, error)
+}
 
 // ingestPayload is the expected shape when using a single JSON file.
 type ingestPayload struct {
@@ -29,15 +37,21 @@ var (
 	ingestFile string
 	ingestTime string
 	batchSize  int
+	embedMode  string
 )
 
 var ingestCmd = &cobra.Command{
 	Use:   "ingest",
 	Short: "Ingest data into the knowledge graph",
-	Long: `Reads node and edge data, generates embeddings via the configured endpoint,
-and batch-inserts into DuckDB with temporal tracking.
+	Long: `Reads node and edge data, generates embeddings, and batch-inserts into DuckDB
+with temporal tracking.
 
-Supports two modes:
+Embeddings are produced in-process by default via kronk/llama.cpp (no server, no
+API keys), using the embedding model and processor from the agent config
+(~/.config/okb/config.yaml). Pass --embed endpoint to use the OpenAI-compatible
+endpoint_url from the domain config instead.
+
+Supports two input modes:
   --file data.json          Single JSON file with {"nodes": [...], "edges": [...]}
   --nodes n.ndjson --edges e.ndjson   Separate NDJSON files (one JSON object per line)`,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -69,21 +83,57 @@ Supports two modes:
 			return fmt.Errorf("initializing database: %w", err)
 		}
 
-		client := embed.NewClient(endpointURL, model)
+		// Select the embedding backend: in-process kronk (default) or HTTP endpoint.
+		emb, cleanup, err := newEmbedder(viper.GetInt("embedding_dim"), endpointURL, model)
+		if err != nil {
+			return err
+		}
+		defer cleanup()
 
 		// Determine ingestion mode.
 		if ingestFile != "" {
-			return ingestSingleJSON(db, client, ts)
+			return ingestSingleJSON(db, emb, ts)
 		}
 		if nodesFile != "" || edgesFile != "" {
-			return ingestNDJSON(db, client, ts)
+			return ingestNDJSON(db, emb, ts)
 		}
 		return fmt.Errorf("provide either --file or --nodes/--edges")
 	},
 }
 
+// newEmbedder builds the embedder for the selected --embed mode. The
+// returned cleanup unloads the local model (no-op for the endpoint client).
+func newEmbedder(dim int, endpointURL, model string) (nodeEmbedder, func(), error) {
+	switch embedMode {
+	case "", "local":
+		cfg, err := agent.LoadConfig(false, false)
+		if err != nil {
+			return nil, nil, fmt.Errorf("loading agent config for local embeddings: %w", err)
+		}
+		if cfg.Processor != "" {
+			if err := os.Setenv("KRONK_PROCESSOR", cfg.Processor); err != nil {
+				return nil, nil, fmt.Errorf("setting KRONK_PROCESSOR: %w", err)
+			}
+		}
+		log.Printf("Embedding in-process via kronk: %s (dim=%d, backend=%s)", cfg.EmbedSource, dim, cfg.Processor)
+		e, err := agent.NewEmbedder(context.Background(), cfg.EmbedSource, dim, nil)
+		if err != nil {
+			return nil, nil, fmt.Errorf("initializing local embedder: %w", err)
+		}
+		return e, func() { _ = e.Close() }, nil
+	case "endpoint":
+		if endpointURL == "" {
+			return nil, nil, fmt.Errorf("--embed endpoint requires endpoint_url in the domain config")
+		}
+		log.Printf("Embedding via endpoint: %s (model=%s)", endpointURL, model)
+		return embed.NewClient(endpointURL, model), func() {}, nil
+	default:
+		return nil, nil, fmt.Errorf("unknown --embed mode %q (want: local|endpoint)", embedMode)
+	}
+}
+
 // ingestSingleJSON handles the original single-JSON-file mode.
-func ingestSingleJSON(db *store.DB, client *embed.Client, ts time.Time) error {
+func ingestSingleJSON(db *store.DB, emb nodeEmbedder, ts time.Time) error {
 	raw, err := os.ReadFile(ingestFile)
 	if err != nil {
 		return fmt.Errorf("reading file: %w", err)
@@ -93,7 +143,7 @@ func ingestSingleJSON(db *store.DB, client *embed.Client, ts time.Time) error {
 		return fmt.Errorf("parsing JSON: %w", err)
 	}
 
-	if err := embedNodes(payload.Nodes, client); err != nil {
+	if err := embedNodes(payload.Nodes, emb); err != nil {
 		return err
 	}
 	stampNodes(payload.Nodes, ts)
@@ -114,7 +164,7 @@ func ingestSingleJSON(db *store.DB, client *embed.Client, ts time.Time) error {
 }
 
 // ingestNDJSON reads NDJSON files and ingests in batches.
-func ingestNDJSON(db *store.DB, client *embed.Client, ts time.Time) error {
+func ingestNDJSON(db *store.DB, emb nodeEmbedder, ts time.Time) error {
 	var totalNodes, totalEdges int
 
 	// Ingest nodes first (edges reference them).
@@ -130,7 +180,7 @@ func ingestNDJSON(db *store.DB, client *embed.Client, ts time.Time) error {
 				nodes = append(nodes, n)
 			}
 
-			if err := embedNodes(nodes, client); err != nil {
+			if err := embedNodes(nodes, emb); err != nil {
 				return err
 			}
 			stampNodes(nodes, ts)
@@ -217,12 +267,12 @@ func processNDJSONFile(path string, batch int, fn func([]json.RawMessage) error)
 	return total, nil
 }
 
-func embedNodes(nodes []domain.Node, client *embed.Client) error {
+func embedNodes(nodes []domain.Node, emb nodeEmbedder) error {
 	ctx := context.Background()
 	for i := range nodes {
 		n := &nodes[i]
 		if n.SemanticText != "" && len(n.Embedding) == 0 {
-			vec, err := client.Embed(ctx, n.SemanticText)
+			vec, err := emb.Embed(ctx, n.SemanticText)
 			if err != nil {
 				return fmt.Errorf("embedding node %s: %w", n.NodeID, err)
 			}
@@ -252,5 +302,6 @@ func init() {
 	ingestCmd.Flags().StringVar(&edgesFile, "edges", "", "NDJSON file of edges (one per line)")
 	ingestCmd.Flags().StringVar(&ingestTime, "time", time.Now().Format("2006-01-02"), "ingestion timestamp (YYYY-MM-DD)")
 	ingestCmd.Flags().IntVar(&batchSize, "batch-size", 500, "records per batch for NDJSON ingestion")
+	ingestCmd.Flags().StringVar(&embedMode, "embed", "local", "embedding backend: local (in-process kronk) or endpoint (OpenAI-compatible endpoint_url)")
 	rootCmd.AddCommand(ingestCmd)
 }

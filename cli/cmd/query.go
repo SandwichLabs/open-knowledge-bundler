@@ -6,7 +6,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/sandwich-labs/open-knowledge-bundler/cli/embed"
 	"github.com/sandwich-labs/open-knowledge-bundler/cli/store"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -40,8 +39,12 @@ var queryCmd = &cobra.Command{
 			return fmt.Errorf("loading extensions: %w", err)
 		}
 
-		client := embed.NewClient(endpointURL, model)
-		queryVec, err := client.Embed(cmd.Context(), queryText)
+		emb, cleanup, err := newEmbedder(viper.GetInt("embedding_dim"), endpointURL, model)
+		if err != nil {
+			return err
+		}
+		defer cleanup()
+		queryVec, err := emb.Embed(cmd.Context(), queryText)
 		if err != nil {
 			return fmt.Errorf("embedding query: %w", err)
 		}
@@ -70,6 +73,7 @@ func init() {
 	queryCmd.Flags().StringVar(&queryText, "text", "", "search query text (required)")
 	queryCmd.Flags().StringVar(&queryDate, "date", "", "temporal filter date (YYYY-MM-DD)")
 	queryCmd.Flags().IntVar(&queryLimit, "limit", 10, "max results to return")
+	queryCmd.Flags().StringVar(&embedMode, "embed", "local", "embedding backend: local (in-process kronk) or endpoint (OpenAI-compatible endpoint_url)")
 	_ = queryCmd.MarkFlagRequired("text")
 	rootCmd.AddCommand(queryCmd)
 }
