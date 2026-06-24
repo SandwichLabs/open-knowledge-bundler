@@ -2,7 +2,7 @@ version: "3"
 
 vars:
   CLI_DIR: ./cli
-  CLI_BIN: "{{.CLI_DIR}}/cbi"
+  CLI_BIN: "{{.CLI_DIR}}/okb"
   DATA_DIR: ./data
   OUT_DIR: ./out
   SOURCE_DB: chi-city-data.duckdb
@@ -14,16 +14,16 @@ tasks:
   # Build
   # ---------------------------------------------------------------------------
   build:
-    desc: Build the cbi CLI binary
+    desc: Build the okb CLI binary
     dir: "{{.CLI_DIR}}"
     cmds:
-      - go build -o cbi .
+      - go build -o okb .
     sources:
       - "**/*.go"
       - go.mod
       - go.sum
     generates:
-      - cbi
+      - okb
 
   tidy:
     desc: Run go mod tidy
@@ -39,7 +39,7 @@ tasks:
     deps: [build]
     dir: "{{.CLI_DIR}}"
     cmds:
-      - ./cbi init --config domain.yaml
+      - ./okb init --config domain.yaml
 
   # ---------------------------------------------------------------------------
   # Data Conversion
@@ -63,7 +63,7 @@ tasks:
     deps: [build, init]
     dir: "{{.CLI_DIR}}"
     cmds:
-      - ./cbi ingest --nodes ../{{.OUT_DIR}}/nodes.ndjson --time {{.TIME}} --batch-size {{.BATCH_SIZE}}
+      - ./okb ingest --nodes ../{{.OUT_DIR}}/nodes.ndjson --time {{.TIME}} --batch-size {{.BATCH_SIZE}}
     vars:
       TIME: '{{.TIME | default "2026-03-29"}}'
       BATCH_SIZE: '{{.BATCH_SIZE | default "500"}}'
@@ -75,7 +75,7 @@ tasks:
     deps: [build, init]
     dir: "{{.CLI_DIR}}"
     cmds:
-      - ./cbi ingest --edges ../{{.OUT_DIR}}/edges.ndjson --time {{.TIME}} --batch-size {{.BATCH_SIZE}}
+      - ./okb ingest --edges ../{{.OUT_DIR}}/edges.ndjson --time {{.TIME}} --batch-size {{.BATCH_SIZE}}
     vars:
       TIME: '{{.TIME | default "2026-03-29"}}'
       BATCH_SIZE: '{{.BATCH_SIZE | default "500"}}'
@@ -106,7 +106,7 @@ tasks:
     deps: [build]
     dir: "{{.CLI_DIR}}"
     cmds:
-      - ./cbi query --text "{{.CLI_ARGS}}" --limit {{.LIMIT}}
+      - ./okb query --text "{{.CLI_ARGS}}" --limit {{.LIMIT}}
     vars:
       LIMIT: '{{.LIMIT | default "10"}}'
 
@@ -212,14 +212,14 @@ tasks:
     deps: [build]
     dir: "{{.CLI_DIR}}"
     cmds:
-      - ./cbi init --config ufo_domain.yaml
+      - ./okb init --config ufo_domain.yaml
 
   ufo:ingest:
     desc: Ingest UFO nodes + edges into the knowledge graph
     deps: [build, ufo:init]
     dir: "{{.CLI_DIR}}"
     cmds:
-      - ./cbi ingest --config ufo_domain.yaml --nodes ../out/ufo/nodes.ndjson --edges ../out/ufo/edges.ndjson --time {{.TIME}} --batch-size {{.BATCH_SIZE}}
+      - ./okb ingest --config ufo_domain.yaml --nodes ../out/ufo/nodes.ndjson --edges ../out/ufo/edges.ndjson --time {{.TIME}} --batch-size {{.BATCH_SIZE}}
     vars:
       TIME: '{{.TIME | default "2026-05-15"}}'
       BATCH_SIZE: '{{.BATCH_SIZE | default "100"}}'
@@ -241,7 +241,7 @@ tasks:
     deps: [build]
     dir: "{{.CLI_DIR}}"
     cmds:
-      - ./cbi serve --config ufo_domain.yaml --addr {{.ADDR}}
+      - ./okb serve --config ufo_domain.yaml --addr {{.ADDR}}
     vars:
       ADDR: '{{.ADDR | default "127.0.0.1:8765"}}'
 
@@ -250,7 +250,7 @@ tasks:
     deps: [build]
     dir: "{{.CLI_DIR}}"
     cmds:
-      - ./cbi generate --config ufo_domain.yaml --output ../{{.OUT}}
+      - ./okb generate --config ufo_domain.yaml --output ../{{.OUT}}
     vars:
       OUT: '{{.OUT | default "out/ufo-static"}}'
 
@@ -259,7 +259,7 @@ tasks:
     deps: [build]
     dir: "{{.CLI_DIR}}"
     cmds:
-      - ./cbi query --config ufo_domain.yaml --text "{{.CLI_ARGS}}" --limit {{.LIMIT}}
+      - ./okb query --config ufo_domain.yaml --text "{{.CLI_ARGS}}" --limit {{.LIMIT}}
     vars:
       LIMIT: '{{.LIMIT | default "10"}}'
 
