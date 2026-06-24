@@ -59,9 +59,10 @@ type tuiModel struct {
 	sub    chan tea.Msg
 	ctx    context.Context
 
-	vp    viewport.Model
-	input textinput.Model
-	rd    *glamour.TermRenderer
+	vp      viewport.Model
+	input   textinput.Model
+	rd      *glamour.TermRenderer
+	mdStyle string // glamour style name, detected once at startup
 
 	width, height int
 	ready         bool
@@ -93,6 +94,16 @@ func RunTUI(ctx context.Context, runner *Runner, info, warn string) error {
 		input:  ti,
 		info:   info,
 		warn:   warn,
+	}
+
+	// Detect the terminal background ONCE, before Bubble Tea owns stdin, then use a
+	// fixed glamour style. glamour.WithAutoStyle() queries the terminal (OSC 11) on
+	// every renderer rebuild; firing that mid-loop leaks the escape-sequence reply
+	// into the text input (e.g. `]11;rgb:…`). Querying here consumes the reply
+	// cleanly and also primes lipgloss's cached profile so it won't re-query later.
+	m.mdStyle = "dark"
+	if !lipgloss.HasDarkBackground() {
+		m.mdStyle = "light"
 	}
 
 	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithContext(ctx))
@@ -290,9 +301,15 @@ func (m *tuiModel) resize(w, h int) {
 	}
 	m.input.Width = w - 4
 
-	// (Re)build the markdown renderer at the current width.
+	// (Re)build the markdown renderer at the current width. Use a fixed style
+	// (detected once in RunTUI) rather than WithAutoStyle(), which would query the
+	// terminal on every resize and leak the OSC reply into the input.
+	style := m.mdStyle
+	if style == "" {
+		style = "dark"
+	}
 	if rd, err := glamour.NewTermRenderer(
-		glamour.WithAutoStyle(),
+		glamour.WithStandardStyle(style),
 		glamour.WithWordWrap(max(20, w-2)),
 	); err == nil {
 		m.rd = rd
