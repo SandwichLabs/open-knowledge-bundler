@@ -3,6 +3,8 @@
 A declarative toolkit for building [open knowledge format](https://cloud.google.com/blog/products/data-analytics/how-the-open-knowledge-format-can-improve-data-sharing) bundles packaged as agent skills. Define your domain in YAML, ingest data, and get vector + lexical + graph search for your local or remote agent(via mcp) over your knowledge. 
 
 ```
+prose corpus  -->  okb extract  --+
+                                  |
 domain.yaml + data  -->  okb ingest  -->  DuckDB knowledge graph
                                               |
                                               +--> okb query "semantic search"
@@ -11,14 +13,23 @@ domain.yaml + data  -->  okb ingest  -->  DuckDB knowledge graph
                                               +--> okb agent  --> fully-local chat over the bundle
 ```
 
+Two front doors into the graph: **`okb extract`** turns a prose corpus into a
+resolved graph with a local LLM (no server, no API keys), and **`okb ingest`**
+loads pre-structured NDJSON/JSON. Either way you land in the same DuckDB graph,
+then **`okb bundle`** packs it into a portable, self-contained knowledge bundle
+that any agent can read or query.
+
 ## What it does
 
+- **Graph extraction from prose** — `okb extract` turns a document corpus into a resolved knowledge graph with a fully-local LLM (kronk/llama.cpp): ontology bootstrap → grammar-constrained extraction → gleaning → entity resolution → relation normalization. No server, no API keys.
+- **Portable knowledge bundles** — `okb bundle` packs the graph into a self-contained [Open Knowledge Format](https://cloud.google.com/blog/products/data-analytics/how-the-open-knowledge-format-can-improve-data-sharing) directory: browsable markdown + the DuckDB database + an optional agent `SKILL.md`. Diffable in git, queryable offline.
+- **Fully-local agent** — `okb agent` chats over a bundle on-device (inference + embeddings via kronk), or expose the same graph to a remote agent over MCP.
 - **Declarative schema** — Define node types, edge types, and field mappings in a single YAML file. No code required to model a new domain.
 - **Hybrid search** — BM25 lexical + cosine vector similarity, fused with Reciprocal Rank Fusion (RRF). Same algorithm in CLI and browser.
 - **Property graph queries** — SQL/PGQ pattern matching via DuckDB's `duckpgq` extension. Multi-hop traversals, shortest path, PageRank.
 - **Temporal tracking** — SCD Type 2 versioning. Query current state or any historical snapshot.
-- **Browser compilation** — Export your graph to a self-contained HTML file with in-browser semantic search (Transformers.js) and interactive graph visualization (sigma.js).
-- **Local-first** — Everything runs on your machine. DuckDB is the only database. Any OpenAI-compatible embedding endpoint works (Ollama, llama.cpp, vLLM).
+- **Local-first** — Everything runs on your machine. DuckDB is the only database. `extract` and `agent` need no network; `ingest` uses any OpenAI-compatible embedding endpoint (Ollama, llama.cpp, vLLM).
+- **Browser compilation** — Optionally export your graph to a self-contained HTML file with in-browser semantic search (Transformers.js) and interactive graph visualization (sigma.js).
 
 ## Quick start
 
@@ -26,23 +37,34 @@ domain.yaml + data  -->  okb ingest  -->  DuckDB knowledge graph
 
 - **Go** 1.24+
 - **[Task](https://taskfile.dev)** v3 (task runner)
-- **Node.js** 18+ (for browser compilation only)
-- **Embedding server** — any OpenAI-compatible endpoint (e.g. `ollama serve` with an embedding model)
+- **Embedding server** — only for `okb ingest`: any OpenAI-compatible `/v1/embeddings` endpoint (e.g. `ollama serve` with an embedding model). `okb extract` and `okb agent` run their LLM and embeddings fully on-device via kronk and need no server.
+- **Node.js** 18+ — only for the optional browser app.
 
-### Build and run with the Pokemon test dataset
+### Build a bundle from the Pokemon test dataset
 
 ```bash
 # Build the CLI
 task build
 
-# Ingest and query the test dataset (ingest auto-initializes the DB)
+# Ingest the test dataset (ingest auto-initializes the DB)
 cd test
 ../cli/okb ingest --nodes nodes.ndjson --config domain.yaml --batch-size 50
 ../cli/okb ingest --edges edges.ndjson --config domain.yaml
+
+# Validate the graph
 ../cli/okb query --text "fire breathing dragon" --config domain.yaml --limit 5
+
+# Pack a portable bundle (DuckDB + OKF markdown + agent skill) ...
+../cli/okb bundle -o pokemon-bundle/ --skill
+
+# ... and chat with it, fully local
+../cli/okb agent --bundle pokemon-bundle/ --ask "which legendary Pokemon are dragons?"
 ```
 
-### Compile to a browser app
+To build a graph from prose instead of structured data, point `okb extract` at a
+corpus — see [Graph extraction from a corpus](#graph-extraction-from-a-corpus-okb-extract).
+
+### Optional: compile to a browser app
 
 ```bash
 cd browser
