@@ -13,7 +13,7 @@ var benchCmd = &cobra.Command{
 
   bench answer        batch-answer a question set with the local agent (no scoring)
   bench eval          score answers against a known-answer key (deterministic)
-  bench convert       convert external datasets into the cbi ingest format
+  bench convert       convert external datasets into the okb ingest format
 
 None of these are needed to build or ship a knowledge bundle.`,
 }
@@ -29,7 +29,7 @@ var siteCmd = &cobra.Command{
   site generate       self-contained static site (index.html + D3 viewer + data)
   site serve          live HTTP API (/api/query, /api/node, /api/sql, /api/stats) + UI
 
-This is separate from the portable knowledge bundle ('cbi bundle').`,
+This is separate from the portable knowledge bundle ('okb bundle').`,
 }
 
 func init() {

@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sandwich-labs/chicago-business-intelligence/cli/domain"
-	"github.com/sandwich-labs/chicago-business-intelligence/cli/embed"
-	"github.com/sandwich-labs/chicago-business-intelligence/cli/store"
+	"github.com/sandwich-labs/open-knowledge-bundler/cli/domain"
+	"github.com/sandwich-labs/open-knowledge-bundler/cli/embed"
+	"github.com/sandwich-labs/open-knowledge-bundler/cli/store"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -64,7 +64,7 @@ Supports two modes:
 		}
 
 		// Auto-initialize: create schema/index/property-graph if absent (idempotent),
-		// so a separate `cbi init` is no longer required before ingesting.
+		// so a separate `okb init` is no longer required before ingesting.
 		if err := initializeDB(db, viper.GetInt("embedding_dim")); err != nil {
 			return fmt.Errorf("initializing database: %w", err)
 		}

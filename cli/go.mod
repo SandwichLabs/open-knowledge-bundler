@@ -1,4 +1,4 @@
-module github.com/sandwich-labs/chicago-business-intelligence/cli
+module github.com/sandwich-labs/open-knowledge-bundler/cli
 
 go 1.26.4
 

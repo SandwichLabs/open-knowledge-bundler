@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"charm.land/fantasy"
-	"github.com/sandwich-labs/chicago-business-intelligence/cli/store"
+	"github.com/sandwich-labs/open-knowledge-bundler/cli/store"
 )
 
 func TestEnsureReadOnly(t *testing.T) {

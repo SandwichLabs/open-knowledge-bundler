@@ -1,4 +1,4 @@
-// Package agent implements `cbi agent`: a self-contained chat agent over an OKF
+// Package agent implements `okb agent`: a self-contained chat agent over an OKF
 // bundle. It pairs a local LLM and embedding model (via kronk/llama.cpp) with
 // the bundle's DuckDB graph and browsable markdown concepts, orchestrated by the
 // fantasy agent framework.
@@ -12,12 +12,12 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/sandwich-labs/chicago-business-intelligence/cli/domain"
+	"github.com/sandwich-labs/open-knowledge-bundler/cli/domain"
 	"gopkg.in/yaml.v3"
 )
 
 // Bundle is a loaded OKF + skill bundle as produced by
-// `cbi bundle --skill`.
+// `okb bundle --skill`.
 type Bundle struct {
 	Dir    string              // bundle root directory
 	Skill  string              // raw SKILL.md contents (system-prompt base), may be empty
@@ -70,7 +70,7 @@ func LoadBundle(dir, dbOverride string) (*Bundle, error) {
 		return nil, fmt.Errorf("domain.yaml has no database_path; pass --db <path>")
 	}
 	if _, err := os.Stat(b.DBPath); err != nil {
-		return nil, fmt.Errorf("bundle database %q not found: %w\nregenerate with `cbi bundle`, or pass --db <path>", b.DBPath, err)
+		return nil, fmt.Errorf("bundle database %q not found: %w\nregenerate with `okb bundle`, or pass --db <path>", b.DBPath, err)
 	}
 
 	// Index markdown docs for the exploration tools.
@@ -124,7 +124,7 @@ func findDomainConfig(dir string) (string, error) {
 			return full, nil
 		}
 	}
-	return "", fmt.Errorf("no domain config (domain.yaml) found in bundle %q; regenerate with `cbi bundle`", dir)
+	return "", fmt.Errorf("no domain config (domain.yaml) found in bundle %q; regenerate with `okb bundle`", dir)
 }
 
 // ReadDoc reads a bundle-relative markdown path, confined to the bundle dir.

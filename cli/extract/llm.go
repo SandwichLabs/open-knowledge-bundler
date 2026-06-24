@@ -1,4 +1,4 @@
-// Package extract implements cbi's fully-local, in-process graph extraction
+// Package extract implements okb's fully-local, in-process graph extraction
 // pipeline: it turns a prose corpus into a resolved knowledge graph (nodes +
 // edges) using a local LLM (via kronk/llama.cpp) for ontology bootstrap, entity
 // and relation extraction, gleaning, entity resolution, and relation

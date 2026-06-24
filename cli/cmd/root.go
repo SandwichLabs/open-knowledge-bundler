@@ -11,9 +11,9 @@ import (
 var cfgFile string
 
 var rootCmd = &cobra.Command{
-	Use:   "cbi",
+	Use:   "okb",
 	Short: "Build portable knowledge bundles (GraphRAG) from any domain",
-	Long: `cbi turns a domain (a prose corpus or structured data) into a portable
+	Long: `okb turns a domain (a prose corpus or structured data) into a portable
 knowledge bundle — a DuckDB graph + browsable OKF markdown + an agent skill —
 that any agent can query, all local-first.
 

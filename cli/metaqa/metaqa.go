@@ -1,5 +1,5 @@
 // Package metaqa converts the MetaQA dataset (WikiMovies knowledge base + the
-// 1/2/3-hop QA sets) into the cbi ingest format: pre-resolved nodes/edges
+// 1/2/3-hop QA sets) into the okb ingest format: pre-resolved nodes/edges
 // NDJSON, a domain.yaml, a vocab.txt for precision scoring, and a
 // questions.jsonl answer key the eval driver consumes.
 //
@@ -17,7 +17,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/sandwich-labs/chicago-business-intelligence/cli/eval"
+	"github.com/sandwich-labs/open-knowledge-bundler/cli/eval"
 )
 
 // relSpec maps a kb relation to the object node type and the edge relationship
@@ -52,7 +52,7 @@ var typePrefix = map[string]string{
 	"Votes":    "votes",
 }
 
-// Node is a pre-resolved cbi node record (matches the ingest NDJSON schema).
+// Node is a pre-resolved okb node record (matches the ingest NDJSON schema).
 type Node struct {
 	NodeID       string         `json:"node_id"`
 	NodeType     string         `json:"node_type"`
@@ -60,7 +60,7 @@ type Node struct {
 	SemanticText string         `json:"semantic_text"`
 }
 
-// Edge is a pre-resolved cbi edge record.
+// Edge is a pre-resolved okb edge record.
 type Edge struct {
 	EdgeID           string  `json:"edge_id"`
 	SourceID         string  `json:"source_id"`
@@ -237,10 +237,10 @@ func Sample(questions []eval.Question, n int, seed int64) []eval.Question {
 	return out
 }
 
-// DomainYAML returns a cbi domain config for the converted movie knowledge
+// DomainYAML returns a okb domain config for the converted movie knowledge
 // graph. The NDJSON this package emits is pre-resolved, so the mappings are
 // nominal; the file mainly declares the node/edge types and embedding settings
-// that `cbi init` needs.
+// that `okb init` needs.
 func DomainYAML(dbFile string) string {
 	var b strings.Builder
 	b.WriteString("domain_name: metaqa_movies\n")

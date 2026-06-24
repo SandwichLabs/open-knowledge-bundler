@@ -3,12 +3,12 @@
 A declarative toolkit for building [open knowledge format](https://cloud.google.com/blog/products/data-analytics/how-the-open-knowledge-format-can-improve-data-sharing) bundles packaged as agent skills. Define your domain in YAML, ingest data, and get vector + lexical + graph search for your local or remote agent(via mcp) over your knowledge. 
 
 ```
-domain.yaml + data  -->  cbi ingest  -->  DuckDB knowledge graph
+domain.yaml + data  -->  okb ingest  -->  DuckDB knowledge graph
                                               |
-                                              +--> cbi query "semantic search"
-                                              +--> cbi graph "SQL/PGQ graph traversal"
-                                              +--> cbi bundle --> portable bundle (.duckdb + OKF + Skill)
-                                              +--> cbi agent  --> fully-local chat over the bundle
+                                              +--> okb query "semantic search"
+                                              +--> okb graph "SQL/PGQ graph traversal"
+                                              +--> okb bundle --> portable bundle (.duckdb + OKF + Skill)
+                                              +--> okb agent  --> fully-local chat over the bundle
 ```
 
 ## What it does
@@ -37,9 +37,9 @@ task build
 
 # Ingest and query the test dataset (ingest auto-initializes the DB)
 cd test
-../cli/cbi ingest --nodes nodes.ndjson --config domain.yaml --batch-size 50
-../cli/cbi ingest --edges edges.ndjson --config domain.yaml
-../cli/cbi query --text "fire breathing dragon" --config domain.yaml --limit 5
+../cli/okb ingest --nodes nodes.ndjson --config domain.yaml --batch-size 50
+../cli/okb ingest --edges edges.ndjson --config domain.yaml
+../cli/okb query --text "fire breathing dragon" --config domain.yaml --limit 5
 ```
 
 ### Compile to a browser app
@@ -116,37 +116,37 @@ The `semantic_text` field is what gets embedded and searched. You can craft it h
 
 ```bash
 # BUILD — input → graph → portable bundle (ingest/extract auto-initialize the DB)
-cbi extract --corpus docs/ -o out/ [--bootstrap --glean 1 --resolve --ingest]
+okb extract --corpus docs/ -o out/ [--bootstrap --glean 1 --resolve --ingest]
                                                      # Prose corpus → graph with a local LLM (fully in-process)
-cbi ingest  --nodes n.ndjson --edges e.ndjson        # Ingest pre-structured data (batched); also --file data.json
-cbi bundle  -o bundle/ [--skill] [--no-db]           # Pack a portable bundle (.duckdb + OKF + Skill)
+okb ingest  --nodes n.ndjson --edges e.ndjson        # Ingest pre-structured data (batched); also --file data.json
+okb bundle  -o bundle/ [--skill] [--no-db]           # Pack a portable bundle (.duckdb + OKF + Skill)
 
 # INSPECT — validate the graph
-cbi query   --text "search" --limit 10               # Hybrid search (BM25 + vector + RRF); --date for temporal
-cbi graph   --sql "FROM GRAPH_TABLE(...)"            # Raw SQL/PGQ queries
-cbi schema                                           # Schema readout with query examples
+okb query   --text "search" --limit 10               # Hybrid search (BM25 + vector + RRF); --date for temporal
+okb graph   --sql "FROM GRAPH_TABLE(...)"            # Raw SQL/PGQ queries
+okb schema                                           # Schema readout with query examples
 
 # CONSUME — fully-local agent over a bundle
-cbi agent   --bundle ./bundle [--ask "q" --json]     # Chat TUI / one-shot answer
+okb agent   --bundle ./bundle [--ask "q" --json]     # Chat TUI / one-shot answer
 
 # bench (benchmark scaffolding) · site (hosted viewer)
-cbi bench eval|answer|convert ...                    # Evaluate the local agent
-cbi site generate -o dist/ | cbi site serve          # Static site / live HTTP API + D3 viewer
+okb bench eval|answer|convert ...                    # Evaluate the local agent
+okb site generate -o dist/ | okb site serve          # Static site / live HTTP API + D3 viewer
 ```
 
-### Graph extraction from a corpus (`cbi extract`)
+### Graph extraction from a corpus (`okb extract`)
 
-`cbi extract` builds a knowledge graph from a prose corpus using a **local LLM**
+`okb extract` builds a knowledge graph from a prose corpus using a **local LLM**
 (via kronk/llama.cpp) — no external server, no API keys. It is the front door for
 domains that start as documents rather than structured records.
 
 ```bash
 # First run: propose an ontology, stop for review, then re-run to extract.
-cbi extract --corpus medical.json -o med-graph/          # auto-bootstrap → review domain.yaml
-cbi extract --corpus medical.json -o med-graph/ --glean 1 --resolve --ingest
+okb extract --corpus medical.json -o med-graph/          # auto-bootstrap → review domain.yaml
+okb extract --corpus medical.json -o med-graph/ --glean 1 --resolve --ingest
 
 # Or bootstrap-and-run in one shot:
-cbi extract --corpus docs/ -o out/ --bootstrap --glean 1 --resolve --ingest --tier large
+okb extract --corpus docs/ -o out/ --bootstrap --glean 1 --resolve --ingest --tier large
 ```
 
 Five in-process stages:
@@ -171,19 +171,19 @@ picks the generator; `--gpu` picks the llama.cpp backend.
 
 ### OKF bundle export
 
-`cbi bundle` packs the graph into a portable bundle: an [Open Knowledge Format](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md)
+`okb bundle` packs the graph into a portable bundle: an [Open Knowledge Format](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md)
 v0.1 directory tree of markdown (readable by humans and agents with no tooling,
 diffable in git) plus — by default — the DuckDB database and domain config, so the
 bundle is self-contained and queryable.
 
 ```bash
-cbi bundle -o bundle/ --mode both        # catalog + one doc per node (default)
-cbi bundle -o bundle/ --mode catalog     # per-type / per-relationship schema only
-cbi bundle -o bundle/ --mode full        # one concept document per node
-cbi bundle --node-types Business,Ward    # restrict to specific node types
-cbi bundle --max-per-type 50             # cap per-node docs written per type
-cbi bundle --skill                       # add SKILL.md → self-contained agent skill (DB included by default)
-cbi bundle --no-db                       # OKF markdown only (omit DB/config)
+okb bundle -o bundle/ --mode both        # catalog + one doc per node (default)
+okb bundle -o bundle/ --mode catalog     # per-type / per-relationship schema only
+okb bundle -o bundle/ --mode full        # one concept document per node
+okb bundle --node-types Business,Ward    # restrict to specific node types
+okb bundle --max-per-type 50             # cap per-node docs written per type
+okb bundle --skill                       # add SKILL.md → self-contained agent skill (DB included by default)
+okb bundle --no-db                       # OKF markdown only (omit DB/config)
 ```
 
 Layout: `index.md` (root listing, carries `okf_version`), `log.md`, `catalog/`
@@ -197,9 +197,9 @@ The DuckDB database and domain config are copied alongside it by default (pass
 markdown for orientation plus a queryable database for precise hybrid retrieval.
 The generated
 `SKILL.md` documents the entity types, the `Nodes_Base`/`Edges_Base` schema, and
-ready-to-run DuckDB SQL + `cbi` query examples.
+ready-to-run DuckDB SQL + `okb` query examples.
 
-### Local agent (`cbi agent`)
+### Local agent (`okb agent`)
 
 Chat with a bundle using a **fully local, self-contained agent** — no API keys,
 no embedding server. Inference and embeddings run on-device via
@@ -207,17 +207,17 @@ no embedding server. Inference and embeddings run on-device via
 and streaming are handled by [fantasy](https://github.com/charmbracelet/fantasy).
 
 ```bash
-cbi agent --bundle ./okf-bundle                 # Bubble Tea chat TUI
-cbi agent --bundle ./okf-bundle --ask "how many incidents per year?"   # one-shot
-cbi agent --bundle ./okf-bundle --tier large --gpu vulkan              # bigger model / backend
-cbi agent --bundle ./okf-bundle --reconfigure   # re-pick the model size
+okb agent --bundle ./okf-bundle                 # Bubble Tea chat TUI
+okb agent --bundle ./okf-bundle --ask "how many incidents per year?"   # one-shot
+okb agent --bundle ./okf-bundle --tier large --gpu vulkan              # bigger model / backend
+okb agent --bundle ./okf-bundle --reconfigure   # re-pick the model size
 ```
 
 The agent answers by calling tools over the bundle: `schema`, `sql_query`
 (read-only), `hybrid_search` (vector + lexical), and `list_docs` / `search_docs`
 / `read_doc` for the markdown concepts. On first run you pick a model size
 (Gemma 4 family); the choice and all settings persist in
-`~/.config/cbi/config.yaml`. Models download once from Hugging Face. The default
+`~/.config/okb/config.yaml`. Models download once from Hugging Face. The default
 llama.cpp backend is **Vulkan** (override with `--gpu` or the `processor` config /
 `KRONK_PROCESSOR`). Embeddings (EmbeddingGemma, 768-dim) are pinned to the
 bundle's index; if they can't be loaded, `hybrid_search` degrades to lexical-only.
@@ -320,10 +320,10 @@ The system uses SCD Type 2 tracking. Each ingestion timestamps records. Query cu
 
 ```bash
 # Current state (default)
-cbi query --text "search"
+okb query --text "search"
 
 # State as of a specific date
-cbi query --text "search" --date 2025-06-15
+okb query --text "search" --date 2025-06-15
 ```
 
 Historical queries use: `WHERE valid_from <= ts AND (valid_to IS NULL OR valid_to > ts)`
@@ -335,7 +335,7 @@ Historical queries use: `WHERE valid_from <= ts AND (valid_to IS NULL OR valid_t
 801 Pokemon, 18 types, 7 regions. Node types: `Pokemon`, `Type`, `Region`. Edge types: `HAS_TYPE`, `FOUND_IN`.
 
 ```bash
-cd test && ../cli/cbi query --text "legendary dragon" --config domain.yaml --limit 3
+cd test && ../cli/okb query --text "legendary dragon" --config domain.yaml --limit 3
 ```
 
 ### Chicago business licenses

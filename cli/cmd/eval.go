@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/sandwich-labs/chicago-business-intelligence/cli/agent"
-	"github.com/sandwich-labs/chicago-business-intelligence/cli/eval"
+	"github.com/sandwich-labs/open-knowledge-bundler/cli/agent"
+	"github.com/sandwich-labs/open-knowledge-bundler/cli/eval"
 	"github.com/spf13/cobra"
 )
 
@@ -30,14 +30,14 @@ var (
 var evalCmd = &cobra.Command{
 	Use:   "eval",
 	Short: "Benchmark the local agent against a known-answer question set",
-	Long: `Runs the local agent (the same one behind 'cbi agent') over a
+	Long: `Runs the local agent (the same one behind 'okb agent') over a
 questions.jsonl answer key and scores its answers deterministically: recall
 (gold coverage), exact-match (Hits@all), and — when a vocabulary is available —
 precision/F1 to catch over-generation (the hallucination mode). Honest "not
 found" misses are counted separately from confident wrong answers.
 
 The model loads once per tier and answers every question in-process (far faster
-than spawning 'cbi agent --ask' per question). Pass --tier more than once to
+than spawning 'okb agent --ask' per question). Pass --tier more than once to
 sweep model sizes and compare. A per-question results JSONL can be written with
 --out; the leaderboard is printed to stdout.
 
@@ -45,9 +45,9 @@ questions.jsonl: one object per line, e.g.
   {"id":"q1","question":"How many Pokemon are there?","gold":["20"],"tags":{"hop":"1"}}
 
 Examples:
-  cbi eval --bundle ./okf-bundle --questions q.jsonl
-  cbi eval --bundle ./okf-bundle --questions q.jsonl --tier small --tier medium --by hop
-  cbi eval --bundle ./okf-bundle --questions q.jsonl --vocab vocab.txt --out results.jsonl`,
+  okb eval --bundle ./okf-bundle --questions q.jsonl
+  okb eval --bundle ./okf-bundle --questions q.jsonl --tier small --tier medium --by hop
+  okb eval --bundle ./okf-bundle --questions q.jsonl --vocab vocab.txt --out results.jsonl`,
 	RunE: runEval,
 }
 

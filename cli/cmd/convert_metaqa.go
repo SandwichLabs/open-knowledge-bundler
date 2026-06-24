@@ -6,8 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/sandwich-labs/chicago-business-intelligence/cli/eval"
-	"github.com/sandwich-labs/chicago-business-intelligence/cli/metaqa"
+	"github.com/sandwich-labs/open-knowledge-bundler/cli/eval"
+	"github.com/sandwich-labs/open-knowledge-bundler/cli/metaqa"
 	"github.com/spf13/cobra"
 )
 
@@ -23,33 +23,33 @@ var (
 
 var convertCmd = &cobra.Command{
 	Use:   "convert",
-	Short: "Convert external datasets into the cbi ingest format",
+	Short: "Convert external datasets into the okb ingest format",
 }
 
 var convertMetaQACmd = &cobra.Command{
 	Use:   "metaqa",
-	Short: "Convert the MetaQA dataset into a cbi domain + eval question set",
+	Short: "Convert the MetaQA dataset into an okb domain + eval question set",
 	Long: `Converts a local copy of MetaQA (the WikiMovies knowledge base plus the
-1/2/3-hop QA sets) into a cbi-ingestable bundle:
+1/2/3-hop QA sets) into a okb-ingestable bundle:
 
   nodes.ndjson      pre-resolved Movie/Person/Year/Genre/... nodes
   edges.ndjson      DIRECTED_BY / STARRED / HAS_GENRE / ... relationships
-  domain.yaml       cbi domain config for the movie graph
-  vocab.txt         entity-name vocabulary for precision scoring (cbi eval --vocab)
-  questions.jsonl   sampled QA answer key for cbi eval (tagged by hop)
+  domain.yaml       okb domain config for the movie graph
+  vocab.txt         entity-name vocabulary for precision scoring (okb eval --vocab)
+  questions.jsonl   sampled QA answer key for okb eval (tagged by hop)
 
 MetaQA is distributed on Google Drive (see github.com/yuyuz/MetaQA); download it
 and point --src at the directory containing kb.txt and the 1-hop/2-hop/3-hop
 folders.
 
 After converting, build a queryable bundle:
-  cd out && cbi ingest --nodes nodes.ndjson --edges edges.ndjson --config domain.yaml \
-    && cbi bundle --skill -o okf-bundle
-  cbi bench eval --bundle out/okf-bundle --questions out/questions.jsonl \
+  cd out && okb ingest --nodes nodes.ndjson --edges edges.ndjson --config domain.yaml \
+    && okb bundle --skill -o okf-bundle
+  okb bench eval --bundle out/okf-bundle --questions out/questions.jsonl \
     --vocab out/vocab.txt --by hop
 
 Example:
-  cbi convert metaqa --src ./MetaQA --out ./metaqa-cbi --sample 100 --hops 1,2,3`,
+  okb convert metaqa --src ./MetaQA --out ./metaqa-okb --sample 100 --hops 1,2,3`,
 	RunE: runConvertMetaQA,
 }
 
@@ -143,7 +143,7 @@ func writeLines(path string, lines []string) error {
 
 func init() {
 	convertMetaQACmd.Flags().StringVar(&mqSrc, "src", "", "MetaQA dataset root (contains kb.txt and N-hop/ folders) (required)")
-	convertMetaQACmd.Flags().StringVar(&mqOut, "out", "metaqa-cbi", "output directory")
+	convertMetaQACmd.Flags().StringVar(&mqOut, "out", "metaqa-okb", "output directory")
 	convertMetaQACmd.Flags().IntSliceVar(&mqHops, "hops", []int{1, 2, 3}, "which hop sets to include")
 	convertMetaQACmd.Flags().IntVar(&mqSample, "sample", 100, "questions to sample per hop (0 = all)")
 	convertMetaQACmd.Flags().Int64Var(&mqSeed, "seed", 42, "random seed for question sampling")

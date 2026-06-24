@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/sandwich-labs/chicago-business-intelligence/cli/domain"
+	"github.com/sandwich-labs/open-knowledge-bundler/cli/domain"
 )
 
 // NormalizeReport summarizes the relation-normalization pass for reporting.

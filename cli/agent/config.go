@@ -20,7 +20,7 @@ type tierPreset struct {
 // defaultTiers are the seeded Gemma 4 presets. They point at the un-gated
 // unsloth GGUF mirrors with the Q4_K_M quant (good size/quality balance, and
 // the full quant range is published for every size — unlike the ggml-org
-// mirrors which only ship Q8_0/bf16). Users can edit ~/.config/cbi/config.yaml
+// mirrors which only ship Q8_0/bf16). Users can edit ~/.config/okb/config.yaml
 // to pin other repos/quants, or the official google/*-qat repos (gated, need
 // KRONK_HF_TOKEN).
 var defaultTiers = []tierPreset{
@@ -32,7 +32,7 @@ var defaultTiers = []tierPreset{
 }
 
 // defaultEmbedSource is an un-gated EmbeddingGemma GGUF (768-dim native,
-// Matryoshka-reducible) matching the dimension used by `cbi` bundles. The
+// Matryoshka-reducible) matching the dimension used by `okb` bundles. The
 // unsloth mirror resolves cleanly through kronk's quant-tag selector (the
 // ggml-org qat repo name does not resolve).
 const defaultEmbedSource = "unsloth/embeddinggemma-300m-GGUF:Q8_0"
@@ -46,7 +46,7 @@ const defaultTier = "medium"
 // config (processor: "") to restore auto-detection, or set "cpu"/"cuda"/"rocm".
 const defaultProcessor = "vulkan"
 
-// Config is the persisted, machine-wide user config (~/.config/cbi/config.yaml).
+// Config is the persisted, machine-wide user config (~/.config/okb/config.yaml).
 type Config struct {
 	Tier        string            // selected tier name
 	Models      map[string]string // tier name -> kronk model source
@@ -61,7 +61,7 @@ func configPath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, "cbi", "config.yaml"), nil
+	return filepath.Join(dir, "okb", "config.yaml"), nil
 }
 
 // LoadConfig loads (seeding defaults and prompting on first use) the user
@@ -173,7 +173,7 @@ func (c *Config) save() error {
 // runPicker prompts the user on stdin to choose a model tier. It runs before
 // the TUI starts, so plain terminal I/O is fine.
 func (c *Config) runPicker() error {
-	fmt.Println("cbi agent — choose a local model size (downloaded once via kronk):")
+	fmt.Println("okb agent — choose a local model size (downloaded once via kronk):")
 	fmt.Println()
 	for i, t := range defaultTiers {
 		marker := "  "

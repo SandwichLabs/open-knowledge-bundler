@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/sandwich-labs/chicago-business-intelligence/cli/store"
+	"github.com/sandwich-labs/open-knowledge-bundler/cli/store"
 )
 
 // Preset is a named graph-query that returns a small subgraph to visualize.

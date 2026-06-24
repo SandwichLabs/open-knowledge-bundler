@@ -7,8 +7,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/sandwich-labs/chicago-business-intelligence/cli/agent"
-	"github.com/sandwich-labs/chicago-business-intelligence/cli/eval"
+	"github.com/sandwich-labs/open-knowledge-bundler/cli/agent"
+	"github.com/sandwich-labs/open-knowledge-bundler/cli/eval"
 	"github.com/spf13/cobra"
 )
 
@@ -48,13 +48,13 @@ var answerCmd = &cobra.Command{
 generated answer plus the retrieved context (the concatenated tool outputs) and
 run metadata — as a JSON array. The model loads once and answers in-process.
 
-Unlike 'cbi eval' this does not score; it produces raw answers + context for an
+Unlike 'okb eval' this does not score; it produces raw answers + context for an
 external evaluator (e.g. GraphRAG-Bench, which judges separately). Question gold
 and tags are passed through for downstream mapping.
 
 Examples:
-  cbi answer --bundle ./med-bundle --questions q.jsonl --out results.json
-  cbi answer --bundle ./med-bundle --questions q.jsonl --limit 30 --tier medium`,
+  okb answer --bundle ./med-bundle --questions q.jsonl --out results.json
+  okb answer --bundle ./med-bundle --questions q.jsonl --limit 30 --tier medium`,
 	RunE: runAnswer,
 }
 

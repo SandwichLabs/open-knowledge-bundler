@@ -19,9 +19,9 @@ import (
 	"github.com/spf13/viper"
 	"gopkg.in/yaml.v3"
 
-	"github.com/sandwich-labs/chicago-business-intelligence/cli/domain"
-	"github.com/sandwich-labs/chicago-business-intelligence/cli/embed"
-	"github.com/sandwich-labs/chicago-business-intelligence/cli/store"
+	"github.com/sandwich-labs/open-knowledge-bundler/cli/domain"
+	"github.com/sandwich-labs/open-knowledge-bundler/cli/embed"
+	"github.com/sandwich-labs/open-knowledge-bundler/cli/store"
 )
 
 //go:embed web.html
@@ -122,7 +122,7 @@ Endpoints:
 			ReadHeaderTimeout: 10 * time.Second,
 		}
 		log.Printf(
-			"cbi serve listening on http://%s (domain=%s db=%s)",
+			"okb serve listening on http://%s (domain=%s db=%s)",
 			serveAddr,
 			domainName,
 			dbPath,

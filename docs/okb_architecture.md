@@ -166,9 +166,9 @@ To support ambiguous or exploratory queries across the generic domain, the syste
 
 Your engineer should implement the following primary CLI commands:
 
-*   **`cbi init --config domain.yaml`**: Initializes the local `domain.duckdb` file, loads the `vss`, `fts`, and `duckpgq` extensions[cite: 1, 2], and creates the base tables mapped to the YAML definitions.
-*   **`cbi ingest --file data.json --time "2026-03-29"`**: Reads incoming JSON data. Uses `net/http` to send text to the Ollama/vLLM endpoint, receives `[]float32` arrays[cite: 2], and batch-inserts the Nodes and Edges. Updates `valid_to` on existing records to maintain chronological history.
-*   **`cbi query --text "search query" --date "2025-01-01"`**: 
+*   **`okb init --config domain.yaml`**: Initializes the local `domain.duckdb` file, loads the `vss`, `fts`, and `duckpgq` extensions[cite: 1, 2], and creates the base tables mapped to the YAML definitions.
+*   **`okb ingest --file data.json --time "2026-03-29"`**: Reads incoming JSON data. Uses `net/http` to send text to the Ollama/vLLM endpoint, receives `[]float32` arrays[cite: 2], and batch-inserts the Nodes and Edges. Updates `valid_to` on existing records to maintain chronological history.
+*   **`okb query --text "search query" --date "2025-01-01"`**: 
     1. Embeds the query via the external endpoint.
     2. Runs the Hybrid Search CTE to find entry nodes.
     3. Executes a SQL/PGQ traversal (e.g., `MATCH (a)->(b)`) restricted by the provided `--date` constraint against the `valid_from`/`valid_to` fields[cite: 1].

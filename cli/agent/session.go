@@ -10,7 +10,7 @@ import (
 	"charm.land/fantasy"
 	kronkprov "charm.land/fantasy/providers/kronk"
 	"github.com/ardanlabs/kronk/sdk/kronk/applog"
-	"github.com/sandwich-labs/chicago-business-intelligence/cli/store"
+	"github.com/sandwich-labs/open-knowledge-bundler/cli/store"
 )
 
 // Session is a fully wired agent over a bundle: database, models, tools, and

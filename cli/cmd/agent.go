@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/sandwich-labs/chicago-business-intelligence/cli/agent"
+	"github.com/sandwich-labs/open-knowledge-bundler/cli/agent"
 	"github.com/spf13/cobra"
 )
 
@@ -25,17 +25,17 @@ var agentCmd = &cobra.Command{
 	Short: "Chat with an OKF bundle using a self-contained local LLM",
 	Long: `Opens an interactive chat TUI backed entirely by local models (via kronk /
 llama.cpp). The agent answers questions about an OKF bundle produced by
-'cbi bundle --skill' using SQL queries against the bundle's
+'okb bundle --skill' using SQL queries against the bundle's
 DuckDB graph plus exploration of its markdown concept documents.
 
 On first run you choose a model size; the choice (and model/processor settings)
-persist in ~/.config/cbi/config.yaml. Models download from Hugging Face on first
+persist in ~/.config/okb/config.yaml. Models download from Hugging Face on first
 use. The default backend is Vulkan; override with --gpu or the config.
 
 Examples:
-  cbi agent --bundle ./okf-bundle
-  cbi agent --bundle ./okf-bundle --tier large
-  cbi agent --bundle ./okf-bundle --reconfigure`,
+  okb agent --bundle ./okf-bundle
+  okb agent --bundle ./okf-bundle --tier large
+  okb agent --bundle ./okf-bundle --reconfigure`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// 1. User config (first-run picker / --reconfigure). The picker is
 		//    skipped in --ask mode so it stays scriptable.

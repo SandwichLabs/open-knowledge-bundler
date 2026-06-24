@@ -1,20 +1,20 @@
-# GraphRAG-Bench × cbi
+# GraphRAG-Bench × okb
 
-Run the local `cbi` agent against the
+Run the local `okb` agent against the
 [GraphRAG-Bench](https://github.com/GraphRAG-Bench/GraphRAG-Benchmark) generation
 benchmark, with **graph construction and judging both done by a local LLM** — no
 API keys, nothing leaves the box.
 
 The benchmark targets systems that build a knowledge graph *from a document
-corpus*. `cbi` now does this in-process with **`cbi extract`** (local LLM,
+corpus*. `okb` now does this in-process with **`okb extract`** (local LLM,
 ontology bootstrap + grammar-constrained extraction + gleaning + entity
 resolution + relation normalization — see `EXTRACTOR_HANDOFF.md`), which replaces
-the throwaway `extract_graph.py` baseline below. The rest is the normal `cbi`
+the throwaway `extract_graph.py` baseline below. The rest is the normal `okb`
 pipeline plus an adapter to GraphRAG-Bench's results schema.
 
 ```bash
-# Step 1, the cbi way (fully local, no :8080 server):
-cbi extract --corpus medical.json -o med-graph/ \
+# Step 1, the okb way (fully local, no :8080 server):
+okb extract --corpus medical.json -o med-graph/ \
     --bootstrap --yes --glean 1 --resolve --ingest --tier large
 # -> med-graph/{nodes,edges}.ndjson, domain.yaml (with ontology), vocab.txt,
 #    and med-graph/<db>.duckdb. Then bundle + prep + answer + judge as before.
@@ -26,9 +26,9 @@ The original Python pipeline (kept for comparison / the v1 baseline) follows.
 
 | Script | Role |
 |--------|------|
-| `extract_graph.py` | Chunk a corpus and LLM-extract entities+relations → cbi `nodes.ndjson`/`edges.ndjson`/`domain.yaml`/`vocab.txt`. Uses an OpenAI-compatible endpoint (a strong local model, e.g. Qwen3.6-35B). |
-| `prep_questions.py` | GraphRAG-Bench questions → cbi `questions.jsonl`, scoped to questions whose entities exist in the extracted graph, stratified by `question_type`. |
-| `to_grbench.py` | `cbi answer` output → GraphRAG-Bench results schema (`id, question, generated_answer, ground_truth, context, question_type`). |
+| `extract_graph.py` | Chunk a corpus and LLM-extract entities+relations → okb `nodes.ndjson`/`edges.ndjson`/`domain.yaml`/`vocab.txt`. Uses an OpenAI-compatible endpoint (a strong local model, e.g. Qwen3.6-35B). |
+| `prep_questions.py` | GraphRAG-Bench questions → okb `questions.jsonl`, scoped to questions whose entities exist in the extracted graph, stratified by `question_type`. |
+| `to_grbench.py` | `okb answer` output → GraphRAG-Bench results schema (`id, question, generated_answer, ground_truth, context, question_type`). |
 | `run_judge.sh` | Run GraphRAG-Bench `generation_eval` with a **local** judge LLM (OpenAI-compatible endpoint) + local BGE embeddings. |
 | `judge-requirements.txt` | Python deps for the judge (generation eval only — no `ragas`). |
 
@@ -38,7 +38,7 @@ The original Python pipeline (kept for comparison / the v1 baseline) follows.
   - a capable chat model on `:8080` (extractor + judge) — e.g. the repo's
     `sketchpad/ai/llm-server/start.sh` (Qwen3.6-35B). Thinking models must run
     with thinking disabled (the scripts pass `chat_template_kwargs.enable_thinking=false`).
-  - a 768-dim embedding model on `:8181` for `cbi ingest` (EmbeddingGemma).
+  - a 768-dim embedding model on `:8181` for `okb ingest` (EmbeddingGemma).
 - The GraphRAG-Bench repo cloned next to this dir (for `Evaluation/`), and its
   `generation_eval.py` patched for a local judge: `timeout` raised from 30s and
   `extra_body={"chat_template_kwargs": {"enable_thinking": false}}` added to the
@@ -55,15 +55,15 @@ python3 extract_graph.py --corpus medical.json --out med-graph \
 
 # 2. Ingest -> bundle (needs the :8181 embedding server; ingest auto-initializes).
 cd med-graph
-cbi ingest --nodes nodes.ndjson --edges edges.ndjson --config domain.yaml
-cbi bundle --skill --config domain.yaml -o okf-bundle
+okb ingest --nodes nodes.ndjson --edges edges.ndjson --config domain.yaml
+okb bundle --skill --config domain.yaml -o okf-bundle
 cp vocab.txt okf-bundle/vocab.txt && cd ..
 
 # 3. Pick questions the graph can answer, stratified by type.
 python3 prep_questions.py --graph-vocab med-graph/vocab.txt --per-type 8 --min-hits 2 --out med-q.jsonl
 
 # 4. Answer them with the local agent (model loads once), capturing context.
-cbi bench answer --bundle med-graph/okf-bundle --questions med-q.jsonl --out med-answers.json
+okb bench answer --bundle med-graph/okf-bundle --questions med-q.jsonl --out med-answers.json
 
 # 5. Map to GraphRAG-Bench schema, then judge with the LOCAL model.
 python3 to_grbench.py --answers med-answers.json --out grbench_results.json
@@ -80,6 +80,6 @@ answer-correctness (Fact Retrieval / Complex Reasoning), plus coverage
   chunks (~2.3 h). `--max-chars` bounds it; `prep_questions.py` then only keeps
   questions the (partial) graph actually covers, so scores stay honest.
 - **Extractor vs answerer.** The graph is *built* with the strong server model;
-  the questions are *answered* by the small local agent model (`cbi agent`) — the
+  the questions are *answered* by the small local agent model (`okb agent`) — the
   system under test. Index-time and query-time models are intentionally different.
 - The judge LLM call is the only network-shaped hop, and it points at localhost.

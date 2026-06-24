@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/sandwich-labs/chicago-business-intelligence/cli/store"
+	"github.com/sandwich-labs/open-knowledge-bundler/cli/store"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -144,8 +144,8 @@ func buildSchemaOutput(db *store.DB) (string, error) {
 ### Hybrid Search (semantic + lexical with RRF fusion)
 `)
 	b.WriteString("```\n")
-	b.WriteString("cbi query --text \"your natural language query\" --limit 10\n")
-	b.WriteString("cbi query --text \"your query\" --date 2025-01-01  # temporal filter\n")
+	b.WriteString("okb query --text \"your natural language query\" --limit 10\n")
+	b.WriteString("okb query --text \"your query\" --date 2025-01-01  # temporal filter\n")
 	b.WriteString("```\n")
 
 	b.WriteString(`
@@ -154,7 +154,7 @@ func buildSchemaOutput(db *store.DB) (string, error) {
 Single hop — find connected nodes:
 `)
 	b.WriteString("```sql\n")
-	b.WriteString(`cbi graph --sql "
+	b.WriteString(`okb graph --sql "
 FROM GRAPH_TABLE(domain_graph
   MATCH (a:\"node\")-[e:\"edge\"]->(b:\"node\")
   WHERE a.node_id = 'some:id' AND e.relationship_type = 'EDGE_TYPE'
@@ -167,7 +167,7 @@ FROM GRAPH_TABLE(domain_graph
 Multi-hop — traverse paths:
 `)
 	b.WriteString("```sql\n")
-	b.WriteString(`cbi graph --sql "
+	b.WriteString(`okb graph --sql "
 FROM GRAPH_TABLE(domain_graph
   MATCH (a:\"node\")-[e1:\"edge\"]->(b:\"node\")-[e2:\"edge\"]->(c:\"node\")
   WHERE a.node_id = 'some:id'
@@ -182,7 +182,7 @@ FROM GRAPH_TABLE(domain_graph
 Fan-out — multiple edge types from same node:
 `)
 	b.WriteString("```sql\n")
-	b.WriteString(`cbi graph --sql "
+	b.WriteString(`okb graph --sql "
 FROM GRAPH_TABLE(domain_graph
   MATCH (p:\"node\")-[e1:\"edge\"]->(t1:\"node\"), (p:\"node\")-[e2:\"edge\"]->(t2:\"node\")
   WHERE p.node_id = 'some:id'
@@ -197,8 +197,8 @@ FROM GRAPH_TABLE(domain_graph
 ### Plain SQL (direct table access)
 `)
 	b.WriteString("```sql\n")
-	b.WriteString("cbi graph --sql \"SELECT * FROM Nodes_Base WHERE node_type = 'Pokemon' AND is_current LIMIT 5\"\n")
-	b.WriteString("cbi graph --sql \"SELECT * FROM Edges_Base WHERE relationship_type = 'EVOLVES_TO' AND is_current\"\n")
+	b.WriteString("okb graph --sql \"SELECT * FROM Nodes_Base WHERE node_type = 'Pokemon' AND is_current LIMIT 5\"\n")
+	b.WriteString("okb graph --sql \"SELECT * FROM Edges_Base WHERE relationship_type = 'EVOLVES_TO' AND is_current\"\n")
 	b.WriteString("```\n")
 
 	b.WriteString(`

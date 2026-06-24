@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sandwich-labs/chicago-business-intelligence/cli/domain"
-	"github.com/sandwich-labs/chicago-business-intelligence/cli/store"
+	"github.com/sandwich-labs/open-knowledge-bundler/cli/domain"
+	"github.com/sandwich-labs/open-knowledge-bundler/cli/store"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"gopkg.in/yaml.v3"
@@ -774,13 +774,13 @@ func (b *okfBundle) writeSkill(dbName, configName string) error {
 	fmt.Fprintf(&s, "-- entities of a type\nSELECT node_id, properties FROM Nodes_Base\nWHERE is_current AND node_type = '%s' LIMIT 20;\n\n", exampleType)
 	fmt.Fprintf(&s, "-- a node's relationships\nSELECT relationship_type, target_id FROM Edges_Base\nWHERE is_current AND source_id = '%s';\n", example)
 	s.WriteString("```\n\n")
-	s.WriteString("Hybrid search (BM25 + vector + graph) via the `cbi` CLI, run from this directory:\n\n")
+	s.WriteString("Hybrid search (BM25 + vector + graph) via the `okb` CLI, run from this directory:\n\n")
 	s.WriteString("```bash\n")
 	if configName != "" {
-		fmt.Fprintf(&s, "cbi query --config %s --text \"your question\" --limit 10\n", configName)
-		fmt.Fprintf(&s, "cbi graph --config %s --sql \"FROM GRAPH_TABLE(domain_graph MATCH (a:\\\"node\\\")-[e:\\\"edge\\\"]->(b:\\\"node\\\") COLUMNS (a.node_id, e.relationship_type, b.node_id)) LIMIT 10\"\n", configName)
+		fmt.Fprintf(&s, "okb query --config %s --text \"your question\" --limit 10\n", configName)
+		fmt.Fprintf(&s, "okb graph --config %s --sql \"FROM GRAPH_TABLE(domain_graph MATCH (a:\\\"node\\\")-[e:\\\"edge\\\"]->(b:\\\"node\\\") COLUMNS (a.node_id, e.relationship_type, b.node_id)) LIMIT 10\"\n", configName)
 	} else {
-		s.WriteString("cbi query --text \"your question\" --limit 10\n")
+		s.WriteString("okb query --text \"your question\" --limit 10\n")
 	}
 	s.WriteString("```\n\n")
 	s.WriteString("> Vector/semantic search needs the embedding endpoint from the domain config to be reachable; ")

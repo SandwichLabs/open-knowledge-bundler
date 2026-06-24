@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/sandwich-labs/chicago-business-intelligence/cli/domain"
+	"github.com/sandwich-labs/open-knowledge-bundler/cli/domain"
 )
 
 // UpsertNodes expires previous versions of matching nodes and inserts new ones.

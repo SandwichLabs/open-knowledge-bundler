@@ -6,8 +6,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/sandwich-labs/chicago-business-intelligence/cli/embed"
-	"github.com/sandwich-labs/chicago-business-intelligence/cli/store"
+	"github.com/sandwich-labs/open-knowledge-bundler/cli/embed"
+	"github.com/sandwich-labs/open-knowledge-bundler/cli/store"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )

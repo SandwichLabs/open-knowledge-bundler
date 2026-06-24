@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/sandwich-labs/chicago-business-intelligence/cli/store"
+	"github.com/sandwich-labs/open-knowledge-bundler/cli/store"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -23,9 +23,9 @@ var graphCmd = &cobra.Command{
 knowledge graph database with all extensions pre-loaded.
 
 Examples:
-  cbi graph --sql "FROM GRAPH_TABLE(domain_graph MATCH (a)-[e]->(b) WHERE a.node_id = 'pokemon:006' COLUMNS (b.node_id, b.node_type, e.relationship_type)) ORDER BY e.relationship_type"
+  okb graph --sql "FROM GRAPH_TABLE(domain_graph MATCH (a)-[e]->(b) WHERE a.node_id = 'pokemon:006' COLUMNS (b.node_id, b.node_type, e.relationship_type)) ORDER BY e.relationship_type"
 
-  cbi graph --sql "SELECT node_type, COUNT(*) FROM Nodes_Base GROUP BY 1"`,
+  okb graph --sql "SELECT node_type, COUNT(*) FROM Nodes_Base GROUP BY 1"`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		dbPath := viper.GetString("database_path")
 		if dbPath == "" {

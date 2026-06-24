@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/ardanlabs/kronk/sdk/kronk/applog"
-	"github.com/sandwich-labs/chicago-business-intelligence/cli/agent"
-	"github.com/sandwich-labs/chicago-business-intelligence/cli/extract"
+	"github.com/sandwich-labs/open-knowledge-bundler/cli/agent"
+	"github.com/sandwich-labs/open-knowledge-bundler/cli/extract"
 	"github.com/spf13/cobra"
 )
 
@@ -42,7 +42,7 @@ var extractCmd = &cobra.Command{
 	Long: `Turns a prose corpus into a resolved knowledge graph, fully in-process
 (no external LLM server). Five stages: ontology bootstrap -> grammar-constrained
 extraction -> gleaning (recall) -> entity resolution -> relation normalization,
-then emits the cbi ingest format (nodes.ndjson, edges.ndjson, domain.yaml,
+then emits the okb ingest format (nodes.ndjson, edges.ndjson, domain.yaml,
 vocab.txt) and can ingest it directly.
 
 The ontology (entity types + a closed, directional relation vocabulary) lives in
@@ -51,8 +51,8 @@ proposed from a corpus sample; without --bootstrap the run stops so you can
 review/edit it, then re-run.
 
 Examples:
-  cbi extract --corpus medical.json -o med-graph/ --bootstrap --glean 1 --resolve --ingest
-  cbi extract --corpus docs/ --config domain.yaml -o out/ --tier xl`,
+  okb extract --corpus medical.json -o med-graph/ --bootstrap --glean 1 --resolve --ingest
+  okb extract --corpus docs/ --config domain.yaml -o out/ --tier xl`,
 	RunE: runExtract,
 }
 

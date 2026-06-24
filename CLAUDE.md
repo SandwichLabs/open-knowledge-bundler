@@ -4,12 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-A domain-agnostic, local-first GraphRAG CLI (`cbi`) that builds temporal knowledge graphs in DuckDB with hybrid search (vector + lexical + graph). The first domain is Chicago business licensing data (58,108+ records), but the system is designed to work with any domain defined via YAML configuration.
+A domain-agnostic, local-first GraphRAG CLI (`okb`) that builds temporal knowledge graphs in DuckDB with hybrid search (vector + lexical + graph). The first domain is Chicago business licensing data (58,108+ records), but the system is designed to work with any domain defined via YAML configuration.
 
 ## Essential Commands
 
 ```bash
-task build                    # Compile the Go CLI → cli/cbi
+task build                    # Compile the Go CLI → cli/okb
 task tidy                     # go mod tidy
 task pipeline                 # Full end-to-end: convert → init → ingest
 task clean                    # Remove binary and out/ directory
@@ -26,48 +26,48 @@ design record in `benchmarks/graphrag-bench/EXTRACTOR_HANDOFF.md`.)
 
 ```bash
 # BUILD — input → graph → portable bundle (ingest/extract auto-initialize the DB)
-cbi extract --corpus docs/ -o out/ [--bootstrap --glean 1 --resolve --ingest]
+okb extract --corpus docs/ -o out/ [--bootstrap --glean 1 --resolve --ingest]
                                                         # Prose corpus → resolved graph with a local LLM (no server)
-cbi ingest --nodes n.ndjson --edges e.ndjson            # NDJSON mode (batched); also --file data.json
-cbi bundle -o bundle/ [--skill] [--no-db] [--mode both|catalog|full] [--node-types ...] [--max-per-type N]
+okb ingest --nodes n.ndjson --edges e.ndjson            # NDJSON mode (batched); also --file data.json
+okb bundle -o bundle/ [--skill] [--no-db] [--mode both|catalog|full] [--node-types ...] [--max-per-type N]
                                                         # Pack a portable bundle (.duckdb + OKF + Skill). --include-db is the DEFAULT; --no-db = markdown only.
 
 # INSPECT — validate the graph
-cbi query --text "search" --limit 10 [--date 2025-01-01]  # Hybrid search with optional temporal filter
-cbi graph --sql "FROM GRAPH_TABLE(...)"                 # Raw SQL/PGQ queries
-cbi schema                                             # LLM-friendly schema readout with query examples
+okb query --text "search" --limit 10 [--date 2025-01-01]  # Hybrid search with optional temporal filter
+okb graph --sql "FROM GRAPH_TABLE(...)"                 # Raw SQL/PGQ queries
+okb schema                                             # LLM-friendly schema readout with query examples
 
 # CONSUME — fully-local agent over a bundle
-cbi agent --bundle ./bundle                            # Chat TUI (kronk LLM + embeddings)
-cbi agent --bundle ./bundle --ask "question" [--json]  # One-shot answer; --json adds tool trace + tokens + timing
-cbi agent --bundle ./bundle --tier large --gpu vulkan  # Pick model size / llama.cpp backend
+okb agent --bundle ./bundle                            # Chat TUI (kronk LLM + embeddings)
+okb agent --bundle ./bundle --ask "question" [--json]  # One-shot answer; --json adds tool trace + tokens + timing
+okb agent --bundle ./bundle --tier large --gpu vulkan  # Pick model size / llama.cpp backend
 
 # bench — benchmark scaffolding (not part of the build pipeline)
-cbi bench eval --bundle ./bundle --questions q.jsonl --vocab vocab.txt --by hop
-cbi bench answer --bundle ./bundle --questions q.jsonl --out answers.json
-cbi bench convert metaqa --src ./MetaQA --out ./metaqa-cbi --sample 100
+okb bench eval --bundle ./bundle --questions q.jsonl --vocab vocab.txt --by hop
+okb bench answer --bundle ./bundle --questions q.jsonl --out answers.json
+okb bench convert metaqa --src ./MetaQA --out ./metaqa-okb --sample 100
 
 # site — hosted graph viewer (separate from the portable bundle)
-cbi site generate -o dist/                             # Self-contained static site
-cbi site serve --addr 127.0.0.1:8765                   # Live HTTP API + UI
+okb site generate -o dist/                             # Self-contained static site
+okb site serve --addr 127.0.0.1:8765                   # Live HTTP API + UI
 
-# cbi init is now hidden — ingest/extract initialize the DB automatically.
+# okb init is now hidden — ingest/extract initialize the DB automatically.
 ```
 
-### Graph Extraction (`cbi extract`)
+### Graph Extraction (`okb extract`)
 
-`cbi extract` builds a resolved knowledge graph from a prose corpus using a
+`okb extract` builds a resolved knowledge graph from a prose corpus using a
 **local LLM** (kronk/llama.cpp, no external server, no API keys) — the front door
 for domains that start as documents rather than structured records. Five
 in-process stages: ontology bootstrap → grammar-constrained extraction → gleaning
 (recall) → entity resolution → relation normalization, then it emits the standard
-cbi ingest shape (`nodes.ndjson`, `edges.ndjson`, `domain.yaml`, `vocab.txt`) and
+okb ingest shape (`nodes.ndjson`, `edges.ndjson`, `domain.yaml`, `vocab.txt`) and
 can `--ingest` straight into DuckDB.
 
 ```bash
-cbi extract --corpus medical.json -o med-graph/                       # auto-bootstrap → stops for ontology review
-cbi extract --corpus medical.json -o med-graph/ --glean 1 --resolve --ingest
-cbi extract --corpus docs/ -o out/ --bootstrap --glean 1 --resolve --ingest --tier large
+okb extract --corpus medical.json -o med-graph/                       # auto-bootstrap → stops for ontology review
+okb extract --corpus medical.json -o med-graph/ --glean 1 --resolve --ingest
+okb extract --corpus docs/ -o out/ --bootstrap --glean 1 --resolve --ingest --tier large
 ```
 
 - **Ontology** (entity types + a closed, directional relation vocabulary) lives in
@@ -81,9 +81,9 @@ cbi extract --corpus docs/ -o out/ --bootstrap --glean 1 --resolve --ingest --ti
 - Code: `cli/extract/` + `cli/cmd/extract.go`; design record in
   `benchmarks/graphrag-bench/EXTRACTOR_HANDOFF.md`.
 
-### Benchmarking (`cbi bench eval`)
+### Benchmarking (`okb bench eval`)
 
-`cbi bench eval` runs the local agent over a `questions.jsonl` answer key (one
+`okb bench eval` runs the local agent over a `questions.jsonl` answer key (one
 `{"question","gold":[...],"tags":{...}}` per line) and scores answers
 deterministically — `recall`, `exact` (Hits@all), and `precision`/`F1` when an
 entity-name `--vocab` is supplied (precision catches over-generation/hallucination
@@ -95,16 +95,16 @@ per-question results with `--out`. Code: `cli/eval/` (scoring) + `cli/cmd/eval.g
 (`init`, `eval`, `answer`, `convert`, `generate`, `serve` were pruned/regrouped on
 2026-06-21; the build surface is now extract/ingest/bundle — see the CLI block above.)
 
-### Dataset conversion (`cbi bench convert metaqa`)
+### Dataset conversion (`okb bench convert metaqa`)
 
 Converts a local [MetaQA](https://github.com/yuyuz/MetaQA) checkout (download from
-the Google Drive linked in its README) into the cbi ingest format + an eval set.
-After converting: `cbi ingest --nodes nodes.ndjson --edges edges.ndjson` →
-`cbi bundle --skill` → `cbi bench eval`. Code: `cli/metaqa/` +
+the Google Drive linked in its README) into the okb ingest format + an eval set.
+After converting: `okb ingest --nodes nodes.ndjson --edges edges.ndjson` →
+`okb bundle --skill` → `okb bench eval`. Code: `cli/metaqa/` +
 `cli/cmd/convert_metaqa.go`. Ingest needs a 768-dim embedding endpoint (see the
-embedding-server note); `cbi bench eval` then runs fully local via kronk.
+embedding-server note); `okb bench eval` then runs fully local via kronk.
 
-### Local Agent (`cbi agent`)
+### Local Agent (`okb agent`)
 
 A self-contained, offline chat agent over an OKF bundle. Inference + embeddings
 run locally via [kronk](https://github.com/ardanlabs/kronk) (llama.cpp); the
@@ -113,7 +113,7 @@ agent loop, tools, and streaming are handled by
 server.
 
 - **Models** (Gemma 4 family) download once from Hugging Face. Size is chosen on
-  first run and persisted, with all settings, in `~/.config/cbi/config.yaml`
+  first run and persisted, with all settings, in `~/.config/okb/config.yaml`
   (`tier`, `models` map, `embed_source`, `processor`). Override per-invocation
   with `--tier`/`--model`/`--gpu`; re-run the picker with `--reconfigure`.
 - **Backend**: defaults to **Vulkan** (`processor: vulkan`). Auto-detect prefers
@@ -141,9 +141,9 @@ task graph:stats                      # Node/edge counts in knowledge graph
 ```bash
 cd test
 rm -f pokemon.duckdb
-../cli/cbi ingest --nodes nodes.ndjson --config domain.yaml --batch-size 10   # auto-initializes the DB
-../cli/cbi ingest --edges edges.ndjson --config domain.yaml
-../cli/cbi query --text "fire breathing dragon" --config domain.yaml --limit 3
+../cli/okb ingest --nodes nodes.ndjson --config domain.yaml --batch-size 10   # auto-initializes the DB
+../cli/okb ingest --edges edges.ndjson --config domain.yaml
+../cli/okb query --text "fire breathing dragon" --config domain.yaml --limit 3
 ```
 
 ## Architecture

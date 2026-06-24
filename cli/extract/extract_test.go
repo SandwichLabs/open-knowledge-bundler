@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/sandwich-labs/chicago-business-intelligence/cli/domain"
+	"github.com/sandwich-labs/open-knowledge-bundler/cli/domain"
 )
 
 func TestNormalizeName(t *testing.T) {

@@ -1,4 +1,4 @@
-# `cbi extract` — Fully-Local Graph Extraction Pipeline (Build Handoff)
+# `okb extract` — Fully-Local Graph Extraction Pipeline (Build Handoff)
 
 **Status:** ✅ **built + benchmarked + validated** (2026-06-21/23). Implemented in
 `cli/extract/` + `cli/cmd/extract.go`, registered in the BUILD group. All five
@@ -21,8 +21,8 @@ above frontier.
 |-----|------:|------:|----------:|-----------:|-----:|--------:|-----:|---------:|
 | v1 (extract_graph.py, Qwen-35B/HTTP) | — | — | ~150 | 0.520 | 0.404 | 0.590 | 0.565 | 0.520 |
 | Sonnet over the v1 bundle | — | — | ~150 | 0.491 | 0.429 | 0.453 | 0.517 | 0.563 |
-| v2 (cbi extract, over-merged) | 1778 | 3884 | 20 | 0.405 | 0.285 | 0.423 | 0.408 | 0.504 |
-| **v2b (cbi extract, leader-clustering fix)** | **2990** | **6593** | **21** | **0.581** | **0.452** | **0.586** | **0.635** | **0.650** |
+| v2 (okb extract, over-merged) | 1778 | 3884 | 20 | 0.405 | 0.285 | 0.423 | 0.408 | 0.504 |
+| **v2b (okb extract, leader-clustering fix)** | **2990** | **6593** | **21** | **0.581** | **0.452** | **0.586** | **0.635** | **0.650** |
 
 Settings for v2b: `--bootstrap --yes --glean 1 --resolve --ingest --tier large
 --gpu vulkan --max-tokens 3072` (the 3072 cap eliminated the long-tail per-call
@@ -58,7 +58,7 @@ the whole feature from it without re-deriving the integration points.
 pass) built the GraphRAG-Bench medical graph, and a benchmarking exercise
 (local Gemma agent + Sonnet subagents over the OKF bundle, scored by a local
 Qwen judge) exposed concrete, repeatable weakpoints in *the graph*, not the
-answerer. This pipeline addresses them and folds extraction into `cbi` itself,
+answerer. This pipeline addresses them and folds extraction into `okb` itself,
 in-process, no external LLM server.
 
 ---
@@ -72,7 +72,7 @@ in-process, no external LLM server.
 | 3 | **Low recall / missing nodes & edges** | `adrenocortical_carcinoma` had only `IS_A` + `ORIGINATES_IN`, no symptom edges (gold lists ~15 symptoms); `pheochromocytoma` had **no node at all**. Single pass, `max_tokens=2048`, chunk boundaries split facts. |
 | 4 | **Wrong granularity** | Symptoms/diagnostics attached to an `IS_A` parent (`adrenal_tumors`) instead of the specific disease; child nodes inherited nothing. |
 | 5 | **Brittle output parsing** | Regex-scrape of the first `{`…`}`; malformed JSON silently dropped a whole chunk. |
-| 6 | **Not self-contained** | Requires a running llama-server (Qwen) on `:8080`; lives in `benchmarks/`, not shipped in `cbi`. |
+| 6 | **Not self-contained** | Requires a running llama-server (Qwen) on `:8080`; lives in `benchmarks/`, not shipped in `okb`. |
 
 `extract_graph.py` (this dir) hits every one of these — read it as the baseline.
 
@@ -83,7 +83,7 @@ in-process, no external LLM server.
 - **Ontology = bootstrap, then editable.** An LLM pass proposes the entity-type +
   closed-relation vocabulary (with canonical direction) from a corpus sample,
   writes it into `domain.yaml`, and the user can edit/approve before the full
-  run. Keeps `cbi` domain-agnostic — **no hardcoded medical schema**.
+  run. Keeps `okb` domain-agnostic — **no hardcoded medical schema**.
 - **Scope = full five-stage pipeline in one go** (extract → glean → resolve →
   normalize → emit/ingest), benchmarked as a whole.
 - **Inference = in-process, 12–32B**, via the kronk SDK (`Chat`), default tier
@@ -113,7 +113,7 @@ cli/cmd/extract.go         cobra command; flags; model load; run; optional --ing
 ### Command surface
 
 ```
-cbi extract --corpus <file|dir> --config domain.yaml -o out/ \
+okb extract --corpus <file|dir> --config domain.yaml -o out/ \
     [--bootstrap]            # (re)derive ontology from a corpus sample, write to domain.yaml, then run
     [--chunk-chars 6000] [--overlap 400] \
     [--glean 1]              # extra recall passes per chunk (0 = off)
@@ -189,7 +189,7 @@ and plain `.txt`/dir-of-text. Detect by extension/JSON-probe.
 
 ### Stage 5 — Emit / ingest (`emit.go`)
 - Write `nodes.ndjson`, `edges.ndjson`, `domain.yaml`, `vocab.txt` in the
-  existing cbi ingest shape (match `extract_graph.py` output exactly so the rest
+  existing okb ingest shape (match `extract_graph.py` output exactly so the rest
   of the toolchain is unchanged). Carry `properties.aliases` and
   `properties.provenance` (source chunk ids) for traceability.
 - `--ingest`: chain `store.Open` → `LoadExtensions` → `UpsertNodes/UpsertEdges`
@@ -331,16 +331,16 @@ type Ontology struct {
 The exercise that found these weakpoints is the acceptance test. After building:
 
 1. Re-extract the GraphRAG-Bench medical corpus:
-   `cbi extract --corpus /tmp/grbench/medical.json --config med-domain.yaml -o med-graph-v2/ --bootstrap --glean 1 --resolve --ingest`
+   `okb extract --corpus /tmp/grbench/medical.json --config med-domain.yaml -o med-graph-v2/ --bootstrap --glean 1 --resolve --ingest`
 2. Structural deltas to report:
    - relation-vocab size: ~150 → target ≤ ~40
    - duplicate-cluster count: → ~0 (verify hodgkin = one node)
    - node/edge counts; alias coverage
    - spot-check known failures: `adrenocortical_carcinoma` now has direct
      symptom edges; `pheochromocytoma` node exists.
-3. Answer-quality delta (the real number): re-bundle (`cbi bundle --skill`),
+3. Answer-quality delta (the real number): re-bundle (`okb bundle --skill`),
    re-run **the same 32 questions** through both paths:
-   - local agent: `cbi bench answer --bundle … --questions /tmp/grbench/med-q.jsonl`
+   - local agent: `okb bench answer --bundle … --questions /tmp/grbench/med-q.jsonl`
    - Sonnet subagents over the bundle (see the harness used in this session;
      answers → `to_grbench.py` → `run_judge.sh`)
    Compare `answer_correctness` by question type vs the v1 baselines:
@@ -375,7 +375,7 @@ embeddinggemma `:8181`.
 - **In-process embeddings for `--ingest`.** `cmd/ingest.go` currently embeds over
   HTTP. To be fully serverless, refactor its embed step behind an interface and
   pass `agent.Embedder`. Until then, `--ingest` still needs `:8181`, but pure
-  `cbi extract` (emit only) is already fully local.
+  `okb extract` (emit only) is already fully local.
 - **Speed.** v1 full extraction was ~10,188 s (~2.8 h) for 386 chunks on Qwen-35B
   over HTTP. In-process 12B with grammar constraints should be faster per token
   and avoids HTTP overhead; gleaning adds passes. Report wall-clock and

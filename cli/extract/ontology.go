@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/sandwich-labs/chicago-business-intelligence/cli/domain"
+	"github.com/sandwich-labs/open-knowledge-bundler/cli/domain"
 	"gopkg.in/yaml.v3"
 )
 

@@ -31,7 +31,7 @@ func NewProvider(logger kronkprov.Logger) (fantasy.Provider, error) {
 	var cfg model.Config
 	model.WithContextWindow(contextWindow)(&cfg)
 	return kronkprov.New(
-		kronkprov.WithName("cbi"),
+		kronkprov.WithName("okb"),
 		kronkprov.WithLogger(logger),
 		kronkprov.WithModelConfig(cfg),
 	)
@@ -126,7 +126,7 @@ func (r *Runner) Stream(ctx context.Context, prompt string, h StreamHandler) (*f
 func BuildSystemPrompt(b *Bundle, schema string, vectorOK bool) string {
 	var p strings.Builder
 
-	fmt.Fprintf(&p, "You are cbi-agent, a data-retrieval assistant answering questions about the \"%s\" knowledge graph. ", b.Name())
+	fmt.Fprintf(&p, "You are okb-agent, a data-retrieval assistant answering questions about the \"%s\" knowledge graph. ", b.Name())
 	p.WriteString("It is an OKF (Open Knowledge Format) bundle: browsable markdown concept documents paired with a DuckDB graph database.\n\n")
 
 	p.WriteString("You answer by calling tools, never by guessing. Available tools:\n")
@@ -154,7 +154,7 @@ func BuildSystemPrompt(b *Bundle, schema string, vectorOK bool) string {
 
 	if strings.TrimSpace(b.Skill) != "" {
 		p.WriteString("\n\n## Bundle notes (from SKILL.md)\n")
-		p.WriteString("These notes describe the bundle. Where they mention `cbi query`/`cbi graph` CLI commands, use your sql_query/hybrid_search tools instead.\n\n")
+		p.WriteString("These notes describe the bundle. Where they mention `okb query`/`okb graph` CLI commands, use your sql_query/hybrid_search tools instead.\n\n")
 		p.WriteString(b.Skill)
 	}
 

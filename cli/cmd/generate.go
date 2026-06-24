@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sandwich-labs/chicago-business-intelligence/cli/domain"
-	"github.com/sandwich-labs/chicago-business-intelligence/cli/store"
+	"github.com/sandwich-labs/open-knowledge-bundler/cli/domain"
+	"github.com/sandwich-labs/open-knowledge-bundler/cli/store"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"gopkg.in/yaml.v3"
