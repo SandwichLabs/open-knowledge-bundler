@@ -28,7 +28,7 @@ that any agent can read or query.
 - **Hybrid search** — BM25 lexical + cosine vector similarity, fused with Reciprocal Rank Fusion (RRF). Same algorithm in CLI and browser.
 - **Property graph queries** — SQL/PGQ pattern matching via DuckDB's `duckpgq` extension. Multi-hop traversals, shortest path, PageRank.
 - **Temporal tracking** — SCD Type 2 versioning. Query current state or any historical snapshot.
-- **Local-first** — Everything runs on your machine. DuckDB is the only database. `extract` and `agent` need no network; `ingest` uses any OpenAI-compatible embedding endpoint (Ollama, llama.cpp, vLLM).
+- **Local-first** — Everything runs on your machine. DuckDB is the only database. `extract`, `agent`, `ingest`, and `query` embed in-process via kronk by default — no server, no API keys. `ingest`/`query` can still target any OpenAI-compatible endpoint (Ollama, llama.cpp, vLLM) with `--embed endpoint`.
 - **Browser compilation** — Optionally export your graph to a self-contained HTML file with in-browser semantic search (Transformers.js) and interactive graph visualization (sigma.js).
 
 ## Quick start
@@ -37,7 +37,7 @@ that any agent can read or query.
 
 - **Go** 1.24+
 - **[Task](https://taskfile.dev)** v3 (task runner)
-- **Embedding server** — only for `okb ingest`: any OpenAI-compatible `/v1/embeddings` endpoint (e.g. `ollama serve` with an embedding model). `okb extract` and `okb agent` run their LLM and embeddings fully on-device via kronk and need no server.
+- **Embedding server** — optional. `okb ingest`/`okb query` embed in-process via kronk by default (no server). Only needed if you pass `--embed endpoint`: any OpenAI-compatible `/v1/embeddings` endpoint (e.g. `ollama serve` with an embedding model). `okb extract` and `okb agent` are always fully on-device.
 - **Node.js** 18+ — only for the optional browser app.
 
 ### Build a bundle from the Pokemon test dataset
@@ -141,6 +141,7 @@ The `semantic_text` field is what gets embedded and searched. You can craft it h
 okb extract --corpus docs/ -o out/ [--bootstrap --glean 1 --resolve --ingest]
                                                      # Prose corpus → graph with a local LLM (fully in-process)
 okb ingest  --nodes n.ndjson --edges e.ndjson        # Ingest pre-structured data (batched); also --file data.json
+                                                     #   embeds in-process by default; --embed endpoint for an HTTP embedder
 okb bundle  -o bundle/ [--skill] [--no-db]           # Pack a portable bundle (.duckdb + OKF + Skill)
 
 # INSPECT — validate the graph

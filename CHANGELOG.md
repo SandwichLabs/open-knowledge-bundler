@@ -3,6 +3,35 @@
 All notable changes to `okb` (the open-knowledge-bundler CLI) are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased] — 2026-06-24
+
+### Changed — `ingest`/`query` embed in-process by default
+
+`okb ingest` and `okb query` embedded only via an external OpenAI-compatible
+endpoint (`endpoint_url`), which meant the otherwise fully-local pipeline still
+needed an embedding server. Both now default to **in-process embeddings via the
+kronk SDK** — the same on-device path `okb extract`/`okb agent` already use — with
+the embedding model and llama.cpp backend taken from the agent config
+(`~/.config/okb/config.yaml`). A new `--embed local|endpoint` flag selects the
+backend; `--embed endpoint` restores the HTTP behavior. The local build →
+inspect → consume loop now needs no server and no API keys.
+
+### Fixed — OSC escape leak in the agent TUI
+
+The chat TUI rebuilt its glamour renderer with `WithAutoStyle()` on every resize,
+which queries the terminal background (OSC 11). Firing that query while Bubble Tea
+owned stdin let the reply (e.g. `]11;rgb:1e1e/1e1e/2e2e`) leak into the text
+input. The background is now detected once before the program starts and the
+renderer uses a fixed `WithStandardStyle`.
+
+### Added — collapsible reasoning in the agent TUI
+
+Model reasoning was dumped inline as faint, hard-to-read text that buried the
+answer. It is now a transcript block that is **collapsed by default** (a cyan
+`reasoning · ctrl+r to expand` affordance) and expands in place via `ctrl+r` into
+a readable, wrapped body. The status bar and input placeholder advertise the
+toggle.
+
 ## [Unreleased] — 2026-06-21
 
 ### Fixed — entity over-merge in resolution (+ raw-graph persistence)
