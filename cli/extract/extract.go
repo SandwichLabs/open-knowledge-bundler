@@ -100,7 +100,7 @@ type ProgressFunc func(format string, a ...any)
 // chunks, accumulating into a Graph. glean is the number of extra recall passes
 // per chunk (0 = off); a pass that adds nothing ends gleaning early for that
 // chunk.
-func Extract(ctx context.Context, g *Generator, ont *domain.Ontology, chunks []Chunk, glean int, progress ProgressFunc) (*Graph, error) {
+func Extract(ctx context.Context, g LLM, ont *domain.Ontology, chunks []Chunk, glean int, progress ProgressFunc) (*Graph, error) {
 	if progress == nil {
 		progress = func(string, ...any) {}
 	}
@@ -145,7 +145,7 @@ func Extract(ctx context.Context, g *Generator, ont *domain.Ontology, chunks []C
 // extractChunk runs one extraction (or glean) pass and folds the result into g.
 // Unknown entity types (the schema no longer enum-constrains them) are coerced
 // to "Other" so the ontology stays closed.
-func extractChunk(ctx context.Context, gen *Generator, system string, schema map[string]any, validType map[string]bool, g *Graph, ch Chunk, hint string) error {
+func extractChunk(ctx context.Context, gen LLM, system string, schema map[string]any, validType map[string]bool, g *Graph, ch Chunk, hint string) error {
 	user := "TEXT:\n" + ch.Text
 	if hint != "" {
 		user = hint + "\n\n" + user

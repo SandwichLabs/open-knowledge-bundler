@@ -7,6 +7,7 @@ import (
 
 	"charm.land/fantasy"
 	kronkprov "charm.land/fantasy/providers/kronk"
+	"charm.land/fantasy/providers/openaicompat"
 	"github.com/ardanlabs/kronk/sdk/kronk/model"
 )
 
@@ -19,10 +20,20 @@ import (
 // cache (e.g. Strix Halo's large unified memory).
 const contextWindow = 131072
 
-// NewProvider creates the kronk LLM provider. Download/install progress is
-// printed via the provider logger (so do this before the TUI starts). Pass nil
-// to use the default stdout FmtLogger.
-func NewProvider(logger kronkprov.Logger) (fantasy.Provider, error) {
+// NewProvider creates the LLM provider for the configured inference backend.
+// For the default kronk backend it loads the in-process llama.cpp provider
+// (download/install progress is printed via the provider logger, so call this
+// before the TUI starts; pass nil for the default stdout FmtLogger). For an
+// external backend it returns an OpenAI-compatible provider pointed at the
+// configured endpoint (e.g. a llama.cpp llama-server).
+func NewProvider(logger kronkprov.Logger, inf Inference) (fantasy.Provider, error) {
+	if inf.IsExternal() {
+		return openaicompat.New(
+			openaicompat.WithName("okb"),
+			openaicompat.WithBaseURL(inf.BaseURL()),
+			openaicompat.WithAPIKey(inf.AuthKey()),
+		)
+	}
 	if logger == nil {
 		logger = kronkprov.FmtLogger
 	}

@@ -3,6 +3,41 @@
 All notable changes to `okb` (the open-knowledge-bundler CLI) are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased] — 2026-06-28
+
+### Added — external LLM provider for `extract` and `agent` (`inference` config)
+
+Generation in `okb extract` and `okb agent` was hardwired to the in-process kronk
+(llama.cpp) backend. A new `inference` block in the agent config
+(`~/.config/okb/config.yaml`) selects the **generation** backend for both:
+
+```yaml
+inference:
+    provider: openai        # kronk (in-process, default) | openai (external)
+    model_id: <served-model-name>
+    endpoint: http://localhost:8080/v1
+    api_key: ""             # optional; a local llama-server ignores it
+```
+
+- `provider: kronk` (default, and the value used when the block is absent) keeps
+  the current self-contained behavior — no change for existing setups.
+- `provider: openai` routes generation to any OpenAI-compatible chat endpoint
+  (a llama.cpp `llama-server`, vLLM, Ollama, …). `okb extract` sends
+  `response_format: json_schema` so a server that honors it constrains output to
+  valid JSON (the same structure-only schema the kronk path uses); the existing
+  clean/repair/retry loop covers servers that don't. `okb agent` uses the
+  `fantasy` `openaicompat` provider, including tool/function calling.
+- Per-command overrides: `--provider kronk|openai`, `--llm-endpoint <base-url>`,
+  and `--llm-model` (extract) / `--model` (agent) for the served model id.
+
+**Embeddings are unaffected** — they always run in-process via `embed_source`
+(or the domain endpoint), pinned to the bundle's 768-dim index. Only generation
+is switched, so an external generation model coexists with local embeddings.
+
+Internally, `okb extract` now depends on an `LLM` interface (the kronk
+`*Generator` and a new HTTP `OpenAIGenerator` both implement it) instead of the
+concrete kronk generator.
+
 ## [Unreleased] — 2026-06-24
 
 ### Changed — `ingest`/`query` embed in-process by default

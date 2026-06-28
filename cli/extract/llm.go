@@ -25,6 +25,28 @@ import (
 // over the autotune cap). 32k is plenty for extraction without a huge KV cache.
 const genContextWindow = 32768
 
+// LLM is the generation backend the extraction pipeline depends on. Two
+// implementations satisfy it: the in-process kronk *Generator (default) and the
+// external OpenAI-compatible *OpenAIGenerator (e.g. a llama.cpp llama-server).
+type LLM interface {
+	// Generate runs one chat completion. A non-nil schema is supplied as an
+	// OpenAI response_format so the output is constrained to valid JSON.
+	Generate(ctx context.Context, system, user string, schema map[string]any) (string, *model.Usage, error)
+	// GenerateJSON generates and unmarshals into v, retrying/repairing on
+	// malformed JSON.
+	GenerateJSON(ctx context.Context, system, user string, schema map[string]any, v any) (*model.Usage, error)
+	// Calls returns the number of completion calls made (for reporting).
+	Calls() int
+	// Close releases any resources (unloads an in-process model; no-op for HTTP).
+	Close() error
+}
+
+// rawGenerator is the minimal single-shot surface generateJSON drives. Both
+// backends implement it, so the retry/clean/repair loop is shared.
+type rawGenerator interface {
+	Generate(ctx context.Context, system, user string, schema map[string]any) (string, *model.Usage, error)
+}
+
 // Generator wraps a kronk generation model for grammar-constrained JSON
 // generation. It mirrors agent.Embedder's setup but loads an instruct model and
 // calls Chat. The two can co-reside (generation + embedder) on a host with
@@ -132,11 +154,19 @@ func (g *Generator) Generate(ctx context.Context, system, user string, schema ma
 // times before failing — extraction must not silently drop a chunk on a single
 // malformed response.
 func (g *Generator) GenerateJSON(ctx context.Context, system, user string, schema map[string]any, v any) (*model.Usage, error) {
+	return generateJSON(ctx, g, system, user, schema, v)
+}
+
+// generateJSON generates with gen and unmarshals the result into v, retrying up
+// to 3 times and attempting a structural repair of truncated/under-closed JSON.
+// Shared by every LLM backend so the recovery behaviour is identical regardless
+// of whether generation is in-process (kronk) or over HTTP.
+func generateJSON(ctx context.Context, gen rawGenerator, system, user string, schema map[string]any, v any) (*model.Usage, error) {
 	const attempts = 3
 	var lastErr error
 	var lastUsage *model.Usage
 	for i := 0; i < attempts; i++ {
-		out, usage, err := g.Generate(ctx, system, user, schema)
+		out, usage, err := gen.Generate(ctx, system, user, schema)
 		lastUsage = usage
 		if err != nil {
 			lastErr = err

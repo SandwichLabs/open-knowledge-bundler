@@ -14,26 +14,29 @@ import (
 )
 
 var (
-	extractCorpus     string
-	extractOut        string
-	extractBootstrap  bool
-	extractSampleN    int
-	extractChunkChars int
-	extractOverlap    int
-	extractGlean      int
-	extractMaxChars   int
-	extractResolve    bool
-	extractThreshold  float64
-	extractGrayLo     float64
-	extractMaxAdjud   int
-	extractTier       string
-	extractModel      string
-	extractProcessor  string
-	extractIngest     bool
-	extractYes        bool
-	extractTime       string
-	extractMaxTokens  int
-	extractFromRaw    string
+	extractCorpus      string
+	extractOut         string
+	extractBootstrap   bool
+	extractSampleN     int
+	extractChunkChars  int
+	extractOverlap     int
+	extractGlean       int
+	extractMaxChars    int
+	extractResolve     bool
+	extractThreshold   float64
+	extractGrayLo      float64
+	extractMaxAdjud    int
+	extractTier        string
+	extractModel       string
+	extractProcessor   string
+	extractProvider    string
+	extractLLMEndpoint string
+	extractLLMModel    string
+	extractIngest      bool
+	extractYes         bool
+	extractTime        string
+	extractMaxTokens   int
+	extractFromRaw     string
 )
 
 var extractCmd = &cobra.Command{
@@ -101,12 +104,17 @@ func runExtract(cmd *cobra.Command, args []string) error {
 	if extractProcessor != "" {
 		acfg.Processor = extractProcessor
 	}
-	llmSource := extractModel
-	if llmSource == "" {
-		if err := acfg.SetTier(extractTier); err != nil {
-			return err
-		}
-		llmSource = acfg.LLMSource()
+	// Resolve the inference backend (flags > config). Embeddings always stay
+	// in-process via kronk, so the processor backend is set up regardless.
+	inf := acfg.Inference
+	if extractProvider != "" {
+		inf.Provider = extractProvider
+	}
+	if extractLLMEndpoint != "" {
+		inf.Endpoint = extractLLMEndpoint
+	}
+	if extractLLMModel != "" {
+		inf.ModelID = extractLLMModel
 	}
 	if acfg.Processor != "" {
 		if err := os.Setenv("KRONK_PROCESSOR", acfg.Processor); err != nil {
@@ -115,11 +123,26 @@ func runExtract(cmd *cobra.Command, args []string) error {
 		fmt.Fprintf(os.Stderr, "llama.cpp backend: %s\n", acfg.Processor)
 	}
 
-	// 4. Load the generation model.
-	fmt.Fprintf(os.Stderr, "loading generation model %s ...\n", llmSource)
-	gen, err := extract.NewGenerator(ctx, llmSource, extractMaxTokens, applog.FmtLogger)
-	if err != nil {
-		return err
+	// 4. Build the generation backend: external OpenAI-compatible endpoint, or
+	//    the in-process kronk model (default).
+	var gen extract.LLM
+	if inf.IsExternal() {
+		fmt.Fprintf(os.Stderr, "LLM: external (%s) — model %q at %s\n", inf.Provider, inf.ModelID, inf.BaseURL())
+		gen = extract.NewOpenAIGenerator(inf.BaseURL(), inf.ModelID, inf.APIKey, extractMaxTokens)
+	} else {
+		llmSource := extractModel
+		if llmSource == "" {
+			if err := acfg.SetTier(extractTier); err != nil {
+				return err
+			}
+			llmSource = acfg.LLMSource()
+		}
+		fmt.Fprintf(os.Stderr, "loading generation model %s ...\n", llmSource)
+		g, err := extract.NewGenerator(ctx, llmSource, extractMaxTokens, applog.FmtLogger)
+		if err != nil {
+			return err
+		}
+		gen = g
 	}
 	defer gen.Close()
 
@@ -275,6 +298,9 @@ func init() {
 	f.IntVar(&extractMaxAdjud, "max-adjudicate", 400, "cap on LLM adjudication/mapping calls (0 = unlimited)")
 	f.StringVar(&extractTier, "tier", "large", "model size tier (small|medium|large|xl|moe)")
 	f.StringVar(&extractModel, "model", "", "override the LLM with an explicit kronk model source")
+	f.StringVar(&extractProvider, "provider", "", "inference backend: kronk (in-process) or openai (external endpoint); overrides config")
+	f.StringVar(&extractLLMEndpoint, "llm-endpoint", "", "OpenAI-compatible base URL for --provider openai (e.g. http://localhost:8080/v1); overrides config")
+	f.StringVar(&extractLLMModel, "llm-model", "", "served model id for --provider openai; overrides config inference.model_id")
 	f.StringVar(&extractProcessor, "gpu", "", "llama.cpp backend (cpu|cuda|rocm|vulkan); overrides config")
 	f.BoolVar(&extractIngest, "ingest", false, "ingest the result into DuckDB in-process (fully local)")
 	f.BoolVar(&extractYes, "yes", false, "continue without stopping for ontology review after an auto-bootstrap")

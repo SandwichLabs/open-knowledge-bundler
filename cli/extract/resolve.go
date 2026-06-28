@@ -58,7 +58,7 @@ const adjudicateSystem = `You decide whether two entity names refer to the SAME 
 // by cosine >= threshold, LLM-adjudicates gray-band pairs in [grayLo, threshold),
 // then canonicalizes clusters and remaps every relation endpoint to the chosen
 // canonical node id. maxAdjudicate caps LLM calls (0 = unlimited).
-func Resolve(ctx context.Context, gen *Generator, emb Embedder, g *Graph, threshold, grayLo float64, maxAdjudicate int, progress ProgressFunc) (*Resolved, error) {
+func Resolve(ctx context.Context, gen LLM, emb Embedder, g *Graph, threshold, grayLo float64, maxAdjudicate int, progress ProgressFunc) (*Resolved, error) {
 	if progress == nil {
 		progress = func(string, ...any) {}
 	}
@@ -235,7 +235,7 @@ func Resolve(ctx context.Context, gen *Generator, emb Embedder, g *Graph, thresh
 	return res, nil
 }
 
-func adjudicate(ctx context.Context, gen *Generator, a, b string) (bool, error) {
+func adjudicate(ctx context.Context, gen LLM, a, b string) (bool, error) {
 	var out struct {
 		Same      bool   `json:"same"`
 		Canonical string `json:"canonical"`

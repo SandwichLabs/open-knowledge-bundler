@@ -25,7 +25,7 @@ const otherRelation = "RELATED_TO"
 // the relations are already canonical in the common case; this fixes inverse
 // phrasings, reversed endpoints, and any off-vocabulary drift (e.g. from a
 // hand-edited ontology), with no silent loss — everything is counted.
-func Normalize(ctx context.Context, gen *Generator, ont *domain.Ontology, res *Resolved, maxMap int, progress ProgressFunc) (*NormalizeReport, error) {
+func Normalize(ctx context.Context, gen LLM, ont *domain.Ontology, res *Resolved, maxMap int, progress ProgressFunc) (*NormalizeReport, error) {
 	if progress == nil {
 		progress = func(string, ...any) {}
 	}
@@ -160,7 +160,7 @@ func typeMatch(actual, declared string) bool {
 
 // mapRelation asks the model to map an off-vocabulary relation to the nearest
 // canonical relation (enum-constrained), or returns "" to bucket it.
-func mapRelation(ctx context.Context, gen *Generator, ont *domain.Ontology, name string) string {
+func mapRelation(ctx context.Context, gen LLM, ont *domain.Ontology, name string) string {
 	choices := append([]string{}, ont.RelationNames()...)
 	choices = append(choices, "NONE")
 	schema := map[string]any{

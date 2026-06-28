@@ -46,12 +46,72 @@ const defaultTier = "medium"
 // config (processor: "") to restore auto-detection, or set "cpu"/"cuda"/"rocm".
 const defaultProcessor = "vulkan"
 
+// Inference backend identifiers (the inference.provider config value).
+const (
+	ProviderKronk  = "kronk"  // in-process llama.cpp via kronk (default)
+	ProviderOpenAI = "openai" // external OpenAI-compatible endpoint (llama-server, vLLM, Ollama)
+)
+
+// defaultInferenceEndpoint is the OpenAI-compatible base URL used when the
+// provider is external and no endpoint is configured. A llama.cpp llama-server
+// serves the OpenAI API under /v1.
+const defaultInferenceEndpoint = "http://localhost:8080/v1"
+
+// Inference selects the LLM backend used for GENERATION (okb extract and okb
+// agent). It does not affect embeddings, which always run in-process (or via the
+// domain endpoint), pinned to the bundle's index dimension.
+//
+//	provider: kronk   -> in-process llama.cpp (default; current behaviour)
+//	provider: openai  -> external OpenAI-compatible chat endpoint
+type Inference struct {
+	Provider string // "kronk" | "openai"
+	ModelID  string // model name sent to an external server (provider=openai)
+	Endpoint string // base URL for provider=openai, e.g. http://localhost:8080/v1
+	APIKey   string // optional bearer token (a local llama-server ignores it)
+}
+
+// IsExternal reports whether generation should route to the external
+// OpenAI-compatible endpoint rather than in-process kronk.
+func (i Inference) IsExternal() bool {
+	switch strings.ToLower(strings.TrimSpace(i.Provider)) {
+	case ProviderOpenAI, "external", "openaicompat", "llama-server", "llamacpp", "vllm", "ollama":
+		return true
+	default:
+		return false
+	}
+}
+
+// BaseURL returns the endpoint normalized to an OpenAI-style base that already
+// includes a version path (clients append /chat/completions). A bare host:port
+// gets /v1 appended; an endpoint that already targets /v1 (or similar) is left
+// as-is.
+func (i Inference) BaseURL() string {
+	u := strings.TrimRight(strings.TrimSpace(i.Endpoint), "/")
+	if u == "" {
+		u = strings.TrimRight(defaultInferenceEndpoint, "/")
+	}
+	if !strings.Contains(u, "/v1") {
+		u += "/v1"
+	}
+	return u
+}
+
+// AuthKey returns the API key, or a harmless placeholder so OpenAI-style clients
+// that require a non-empty key work against a local server that ignores auth.
+func (i Inference) AuthKey() string {
+	if strings.TrimSpace(i.APIKey) != "" {
+		return i.APIKey
+	}
+	return "sk-no-auth"
+}
+
 // Config is the persisted, machine-wide user config (~/.config/okb/config.yaml).
 type Config struct {
 	Tier        string            // selected tier name
 	Models      map[string]string // tier name -> kronk model source
 	EmbedSource string            // kronk model source for embeddings
 	Processor   string            // llama.cpp backend (cpu|cuda|rocm|vulkan|"" for auto)
+	Inference   Inference         // generation backend (kronk or external)
 	v           *viper.Viper
 	path        string
 }
@@ -86,6 +146,10 @@ func LoadConfig(reconfigure, interactive bool) (*Config, error) {
 	v.SetDefault("embed_source", defaultEmbedSource)
 	v.SetDefault("tier", defaultTier)
 	v.SetDefault("processor", defaultProcessor)
+	v.SetDefault("inference.provider", ProviderKronk)
+	v.SetDefault("inference.model_id", "")
+	v.SetDefault("inference.endpoint", defaultInferenceEndpoint)
+	v.SetDefault("inference.api_key", "")
 
 	exists := false
 	if _, err := os.Stat(path); err == nil {
@@ -121,6 +185,15 @@ func (c *Config) reload() {
 	c.Models = c.v.GetStringMapString("models")
 	c.EmbedSource = c.v.GetString("embed_source")
 	c.Processor = c.v.GetString("processor")
+	c.Inference = Inference{
+		Provider: c.v.GetString("inference.provider"),
+		ModelID:  c.v.GetString("inference.model_id"),
+		Endpoint: c.v.GetString("inference.endpoint"),
+		APIKey:   c.v.GetString("inference.api_key"),
+	}
+	if strings.TrimSpace(c.Inference.Provider) == "" {
+		c.Inference.Provider = ProviderKronk
+	}
 	// Backfill any tiers missing from a hand-edited config.
 	if c.Models == nil {
 		c.Models = map[string]string{}
@@ -167,6 +240,10 @@ func (c *Config) save() error {
 	c.v.Set("models", c.Models)
 	c.v.Set("embed_source", c.EmbedSource)
 	c.v.Set("processor", c.Processor)
+	c.v.Set("inference.provider", c.Inference.Provider)
+	c.v.Set("inference.model_id", c.Inference.ModelID)
+	c.v.Set("inference.endpoint", c.Inference.Endpoint)
+	c.v.Set("inference.api_key", c.Inference.APIKey)
 	return c.v.WriteConfigAs(c.path)
 }
 

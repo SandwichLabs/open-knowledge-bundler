@@ -103,7 +103,7 @@ func runAnswer(cmd *cobra.Command, args []string) error {
 	}
 
 	ctx := context.Background()
-	sess, err := agent.NewSession(ctx, bundle, llmSource, cfg.EmbedSource, true, func(format string, a ...any) {
+	sess, err := agent.NewSession(ctx, bundle, llmSource, cfg.EmbedSource, cfg.Inference, true, func(format string, a ...any) {
 		fmt.Fprintf(os.Stderr, format+"\n", a...)
 	})
 	if err != nil {

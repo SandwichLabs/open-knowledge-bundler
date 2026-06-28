@@ -37,7 +37,7 @@ type Logf func(format string, args ...any)
 // quietStdout, when true, routes kronk's own progress logging (model/library
 // downloads) to stderr so stdout stays clean for machine-readable output
 // (--json). The setup progress sink (log) is the caller's to direct.
-func NewSession(ctx context.Context, bundle *Bundle, llmSource, embedSource string, quietStdout bool, log Logf) (*Session, error) {
+func NewSession(ctx context.Context, bundle *Bundle, llmSource, embedSource string, inf Inference, quietStdout bool, log Logf) (*Session, error) {
 	if log == nil {
 		log = func(string, ...any) {}
 	}
@@ -64,18 +64,29 @@ func NewSession(ctx context.Context, bundle *Bundle, llmSource, embedSource stri
 		return nil, fmt.Errorf("loading DuckDB extensions: %w", err)
 	}
 
-	// Language model (downloads on first use).
-	log("Loading language model %s … (first run downloads llama.cpp + the model)", llmSource)
-	provider, err := NewProvider(provLogger)
+	// Language model. For kronk this downloads/loads on first use; for an
+	// external provider modelID is the name sent to the endpoint (the model is
+	// already loaded server-side).
+	modelID := llmSource
+	if inf.IsExternal() {
+		modelID = inf.ModelID
+		if modelID == "" {
+			modelID = "local-model"
+		}
+		log("Using external LLM (%s) model %q at %s", inf.Provider, modelID, inf.BaseURL())
+	} else {
+		log("Loading language model %s … (first run downloads llama.cpp + the model)", llmSource)
+	}
+	provider, err := NewProvider(provLogger, inf)
 	if err != nil {
 		s.Close()
-		return nil, fmt.Errorf("creating kronk provider: %w", err)
+		return nil, fmt.Errorf("creating LLM provider: %w", err)
 	}
 	s.provider = provider
-	model, err := provider.LanguageModel(ctx, llmSource)
+	model, err := provider.LanguageModel(ctx, modelID)
 	if err != nil {
 		s.Close()
-		return nil, fmt.Errorf("loading language model %q: %w", llmSource, err)
+		return nil, fmt.Errorf("loading language model %q: %w", modelID, err)
 	}
 
 	// Embedding model (best-effort; degrade to lexical-only on failure).
@@ -162,13 +173,13 @@ type AskResult struct {
 	ToolCalls   []AskToolCall   `json:"tool_calls"`
 	ToolResults []AskToolResult `json:"tool_results,omitempty"`
 	Steps       int             `json:"steps"`
-	Usage      AskUsage       `json:"usage"`
-	DurationMS int64          `json:"duration_ms"`
-	VectorOK   bool           `json:"vector_ok"`
-	Model      string         `json:"model"`
-	Bundle     string         `json:"bundle"`
-	Warning    string         `json:"warning,omitempty"`
-	Error      string         `json:"error,omitempty"`
+	Usage       AskUsage        `json:"usage"`
+	DurationMS  int64           `json:"duration_ms"`
+	VectorOK    bool            `json:"vector_ok"`
+	Model       string          `json:"model"`
+	Bundle      string          `json:"bundle"`
+	Warning     string          `json:"warning,omitempty"`
+	Error       string          `json:"error,omitempty"`
 }
 
 // AskToolCall records one tool invocation (name + raw JSON input) in call order.

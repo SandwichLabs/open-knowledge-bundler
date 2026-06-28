@@ -114,7 +114,7 @@ func runEval(cmd *cobra.Command, args []string) error {
 		}
 
 		fmt.Fprintf(os.Stderr, "\n=== tier %s (%s) — %d questions ===\n", tier, llmSource, len(questions))
-		results, err := evalTier(ctx, bundle, llmSource, cfg.EmbedSource, tier, questions, vocab)
+		results, err := evalTier(ctx, bundle, llmSource, cfg.EmbedSource, cfg.Inference, tier, questions, vocab)
 		if err != nil {
 			return fmt.Errorf("tier %s: %w", tier, err)
 		}
@@ -135,8 +135,8 @@ func runEval(cmd *cobra.Command, args []string) error {
 }
 
 // evalTier loads one model tier and answers every question with a fresh history.
-func evalTier(ctx context.Context, bundle *agent.Bundle, llmSource, embedSource, tier string, questions []eval.Question, vocab map[string]struct{}) ([]eval.Result, error) {
-	sess, err := agent.NewSession(ctx, bundle, llmSource, embedSource, true, func(format string, a ...any) {
+func evalTier(ctx context.Context, bundle *agent.Bundle, llmSource, embedSource string, inf agent.Inference, tier string, questions []eval.Question, vocab map[string]struct{}) ([]eval.Result, error) {
+	sess, err := agent.NewSession(ctx, bundle, llmSource, embedSource, inf, true, func(format string, a ...any) {
 		fmt.Fprintf(os.Stderr, format+"\n", a...)
 	})
 	if err != nil {

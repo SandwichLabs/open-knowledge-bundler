@@ -18,6 +18,8 @@ var (
 	agentReconfigure bool
 	agentAsk         string
 	agentJSON        bool
+	agentProvider    string
+	agentEndpoint    string
 )
 
 var agentCmd = &cobra.Command{
@@ -72,16 +74,30 @@ Examples:
 			return err
 		}
 
-		// 4. Resolve model sources (flags > config > bundle).
+		// 4. Resolve the inference backend (flags > config). For an external
+		//    provider --model sets the served model id; for kronk it overrides
+		//    the local model source.
+		inf := cfg.Inference
+		if agentProvider != "" {
+			inf.Provider = agentProvider
+		}
+		if agentEndpoint != "" {
+			inf.Endpoint = agentEndpoint
+		}
+		if agentModel != "" && inf.IsExternal() {
+			inf.ModelID = agentModel
+		}
+
+		// 5. Resolve model sources (flags > config > bundle).
 		llmSource := cfg.LLMSource()
 		if agentModel != "" {
 			llmSource = agentModel
 		}
 		embedSource := cfg.EmbedSource
 
-		// 5. Wire the session (downloads + loads happen here, with progress).
+		// 6. Wire the session (downloads + loads happen here, with progress).
 		ctx := context.Background()
-		sess, err := agent.NewSession(ctx, bundle, llmSource, embedSource, agentJSON, func(format string, a ...any) {
+		sess, err := agent.NewSession(ctx, bundle, llmSource, embedSource, inf, agentJSON, func(format string, a ...any) {
 			fmt.Fprintf(progress, format+"\n", a...)
 		})
 		if err != nil {
@@ -104,7 +120,9 @@ func init() {
 	agentCmd.Flags().StringVar(&agentBundle, "bundle", "", "path to an OKF bundle directory (required)")
 	agentCmd.Flags().StringVar(&agentDB, "db", "", "override the bundle's DuckDB path")
 	agentCmd.Flags().StringVar(&agentTier, "tier", "", "model size tier (small|medium|large|xl|moe)")
-	agentCmd.Flags().StringVar(&agentModel, "model", "", "override the LLM with an explicit kronk model source")
+	agentCmd.Flags().StringVar(&agentModel, "model", "", "override the LLM: kronk model source, or (with --provider openai) the served model id")
+	agentCmd.Flags().StringVar(&agentProvider, "provider", "", "inference backend: kronk (in-process) or openai (external endpoint); overrides config")
+	agentCmd.Flags().StringVar(&agentEndpoint, "llm-endpoint", "", "OpenAI-compatible base URL for --provider openai (e.g. http://localhost:8080/v1); overrides config")
 	agentCmd.Flags().StringVar(&agentProcessor, "gpu", "", "llama.cpp backend (cpu|cuda|rocm|vulkan); overrides config")
 	agentCmd.Flags().BoolVar(&agentReconfigure, "reconfigure", false, "re-run the model size picker")
 	agentCmd.Flags().StringVar(&agentAsk, "ask", "", "answer a single question non-interactively and exit (no TUI)")

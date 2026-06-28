@@ -100,7 +100,7 @@ var relationsSchema = map[string]any{
 // constrained passes: first the entity types, then the directional relations
 // with source_type/target_type enum-constrained to those types (a single pass
 // cannot constrain the endpoints to types it is inventing in the same call).
-func Bootstrap(ctx context.Context, g *Generator, chunks []Chunk, sampleN int) (*domain.Ontology, error) {
+func Bootstrap(ctx context.Context, g LLM, chunks []Chunk, sampleN int) (*domain.Ontology, error) {
 	sample := SampleChunks(chunks, sampleN)
 	var b strings.Builder
 	for _, c := range sample {

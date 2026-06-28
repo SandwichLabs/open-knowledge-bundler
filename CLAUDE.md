@@ -78,8 +78,36 @@ okb extract --corpus docs/ -o out/ --bootstrap --glean 1 --resolve --ingest --ti
   — keep extraction schemas structure-only).
 - `--tier small|medium|large|xl|moe` (default `large` = Gemma-4-12B) or `--model`
   picks the generator; `--gpu` picks the llama.cpp backend.
-- Code: `cli/extract/` + `cli/cmd/extract.go`; design record in
-  `benchmarks/graphrag-bench/EXTRACTOR_HANDOFF.md`.
+- **External LLM**: generation defaults to in-process kronk but can be routed to
+  any OpenAI-compatible endpoint (llama-server/vLLM/Ollama) via the `inference`
+  config block or `--provider openai --llm-endpoint <url> --llm-model <id>`. The
+  HTTP path sends `response_format: json_schema`. See "Inference backend" below.
+- Code: `cli/extract/` (`llm.go` = `LLM` interface + kronk `Generator`,
+  `llm_openai.go` = HTTP `OpenAIGenerator`) + `cli/cmd/extract.go`; design record
+  in `benchmarks/graphrag-bench/EXTRACTOR_HANDOFF.md`.
+
+### Inference backend (kronk vs external OpenAI-compatible)
+
+Generation for `okb extract` and `okb agent` defaults to **in-process kronk**
+(llama.cpp), but can be switched to an external OpenAI-compatible server. This
+affects **generation only** — embeddings always run in-process via `embed_source`
+(or the domain endpoint), pinned to the bundle's 768-dim index. Configure it once
+in `~/.config/okb/config.yaml`:
+
+```yaml
+inference:
+  provider: openai        # kronk (in-process, default) | openai (external)
+  model_id: <served-model-name>
+  endpoint: http://localhost:8080/v1
+  api_key: ""             # optional; a local llama-server ignores it
+```
+
+Per-command overrides: `--provider kronk|openai`, `--llm-endpoint <base-url>`,
+`--llm-model` (extract) / `--model` (agent). When the block is absent the
+provider is `kronk`, so existing setups are unchanged. Tradeoff observed on Strix
+Halo: a larger external model (e.g. Qwen3 35B-A3B on llama-server) gives the agent
+markedly better reasoning/SQL, but per-chunk extraction is slower than the small
+in-process tiers — pick per command.
 
 ### Benchmarking (`okb bench eval`)
 
@@ -106,16 +134,18 @@ embedding-server note); `okb bench eval` then runs fully local via kronk.
 
 ### Local Agent (`okb agent`)
 
-A self-contained, offline chat agent over an OKF bundle. Inference + embeddings
-run locally via [kronk](https://github.com/ardanlabs/kronk) (llama.cpp); the
-agent loop, tools, and streaming are handled by
+A self-contained, offline chat agent over an OKF bundle. By default inference +
+embeddings run locally via [kronk](https://github.com/ardanlabs/kronk)
+(llama.cpp); the agent loop, tools, and streaming are handled by
 [fantasy](https://github.com/charmbracelet/fantasy). No API keys, no embedding
-server.
+server. Generation can optionally be pointed at an external OpenAI-compatible
+server (see "Inference backend" above); embeddings stay in-process either way.
 
 - **Models** (Gemma 4 family) download once from Hugging Face. Size is chosen on
   first run and persisted, with all settings, in `~/.config/okb/config.yaml`
-  (`tier`, `models` map, `embed_source`, `processor`). Override per-invocation
-  with `--tier`/`--model`/`--gpu`; re-run the picker with `--reconfigure`.
+  (`tier`, `models` map, `embed_source`, `processor`, `inference`). Override
+  per-invocation with `--tier`/`--model`/`--gpu` (or `--provider`/`--llm-endpoint`
+  for an external LLM); re-run the picker with `--reconfigure`.
 - **Backend**: defaults to **Vulkan** (`processor: vulkan`). Auto-detect prefers
   ROCm when `rocminfo` is present, which is unreliable on AMD APUs; Vulkan is the
   fast, reliable path on Strix Halo. Set `KRONK_PROCESSOR` or the `processor`
